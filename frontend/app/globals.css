@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  background: #07090d;
+  color: #e5e7eb;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+.panel {
+  @apply bg-panel border border-edge rounded-xl;
+}
+
+.glow {
+  box-shadow: 0 0 32px -8px rgba(34, 211, 238, 0.35);
+}
+
+.scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 3px; }

@@ -1,98 +1,93 @@
-<header>
+# ATLAS — Autonomous Trading & Learning Algorithm System
 
-![Deprecation Badge](https://img.shields.io/badge/Skills-Deprecated-333?logo=github&labelColor=454c54&color=bf8700)
+Probability-driven trading research terminal for US indices (US100 / S&P 500).
+Milestone 1: working skeleton end-to-end. Built to reason about setups in
+expectancy and risk terms, not to promise returns.
 
-This course has been deprecated. Please visit the [Getting Started with GitHub Copilot](https://github.com/skills/getting-started-with-github-copilot) exercise for the newest learning content.
+## What's in Milestone 1
 
-<!--
-  <<< Author notes: Course header >>>
-  Read <https://skills.github.com/quickstart> for more information about how to build courses using this template.
-  Include a 1280×640 image, course name in sentence case, and a concise description in emphasis.
-  In your repository settings: enable template repository, add your 1280×640 social image, auto delete head branches.
-  Next to "About", add description & tags; disable releases, packages, & environments.
-  Add your open source license, GitHub uses the MIT license.
--->
+- FastAPI backend with a pluggable market-data adapter (mock by default, MT5
+  integration documented)
+- Engines: rolling correlation, lead–lag (cross-correlation), ATR + volatility
+  regime, SMC/ICT structure scoring, Bayesian posterior, expectancy,
+  combined confidence scorer
+- ATR-based position sizing and risk service
+- Postgres-backed trade journal (SQLAlchemy)
+- WebSocket stream that pushes live signals + AI "thinking" reasoning
+- Next.js + Tailwind dashboard: price charts, correlation panel, bias meter,
+  thinking panel, trade journal
+- Pytest suite covering the quant math
 
-# Code with GitHub Copilot
+## Explicitly deferred (documented TODOs, not faked)
 
-_GitHub Copilot can help you code by offering autocomplete-style suggestions right in VS Code and Codespaces._
+Monte Carlo equity simulator UI, walk-forward backtester, self-learning weight
+adaptation, weekly AI reports, news sentiment, liquidity heatmaps, what-if
+simulator, live MT5 order execution (adapter interface is there; live trading
+is the next milestone).
 
-</header>
+## Layout
 
-<!--
-  <<< Author notes: Step 1 >>>
-  Choose 3-5 steps for your course.
-  The first step is always the hardest, so pick something easy!
-  Link to docs.github.com for further explanations.
-  Encourage users to open new tabs for steps!
--->
+```
+backend/      FastAPI app, engines, adapters, tests
+frontend/     Next.js 14 app router dashboard
+docker-compose.yml  Postgres + Redis + backend + frontend
+.env.example  Environment template
+```
 
-## Step 1: Leverage Codespaces with VS Code for Copilot
+## Quickstart (Docker)
 
-_Welcome to "Develop With AI Powered Code Suggestions Using GitHub Copilot and VS Code"! :wave:_
+```bash
+cp .env.example .env
+docker compose up --build
+```
 
-GitHub Copilot is an AI pair programmer that helps you write code faster and with less work. It draws context from comments and code to suggest individual lines and whole functions instantly. GitHub Copilot is powered by OpenAI Codex, a generative pretrained language model created by OpenAI.
+- Backend:  http://localhost:8000  (docs at /docs)
+- Frontend: http://localhost:3000
+- WebSocket: ws://localhost:8000/ws/signals
 
-**Copilot works with many code editors including VS Code, Visual Studio, JetBrains IDE, and Neovim.**
+## Quickstart (local dev)
 
-Additionally, GitHub Copilot is trained on all languages that appear in public repositories. For each language, the quality of suggestions you receive may depend on the volume and diversity of training data for that language.
+Backend:
+```bash
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+export DATABASE_URL=sqlite:///./atlas.db
+uvicorn app.main:app --reload
+```
 
-Using Copilot inside a Codespace shows just how easy it is to get up and running with GitHub's suite of [Collaborative Coding](https://github.com/features#features-collaboration) tools.
+Frontend:
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-> **Note**
-> This skills exercise will focus on leveraging GitHub Codespace. It is recommended that you complete the GitHub skill, [Codespaces](https://github.com/skills/code-with-codespaces), before moving forward with this exercise.
+Tests:
+```bash
+cd backend && pytest
+```
 
-### :keyboard: Activity: Enable Copilot inside a Codespace
+## Environment variables
 
-**We recommend opening another browser tab to work through the following activities so you can keep these instructions open for reference.**
+See `.env.example`. The mock adapter needs no credentials. To switch to MT5
+set `MARKET_ADAPTER=mt5` and populate `MT5_LOGIN`, `MT5_PASSWORD`,
+`MT5_SERVER`. The MT5 adapter is stubbed with the real integration points
+marked — fill them in once you have a broker account and the `MetaTrader5`
+Python package installed (Windows-only dependency).
 
-Before you open up a codespace on a repository, you can create a development container and define specific extensions or configurations that will be used or installed in your codespace. Let's create this development container and add copilot to the list of extensions.
+## Design notes
 
-1. Navigating back to your **Code** tab of your repository, click the **Add file** drop-down button, and then click `Create new file`.
-1. Type or paste the following in the empty text field prompt to name your file.
-   ```
-   .devcontainer/devcontainer.json
-   ```
-1. In the body of the new **.devcontainer/devcontainer.json** file, add the following content:
-   ```
-   {
-       // Name this configuration
-       "name": "Codespace for Skills!",
-       "customizations": {
-           "vscode": {
-               "extensions": [
-                   "GitHub.copilot"
-               ]
-           }
-       }
-   }
-   ```
-1. Select the option to **Commit directly to the `main` branch**, and then click the **Commit new file** button.
-1. Navigate back to the home page of your repository by clicking the **Code** tab located at the top left of the screen.
-1. Click the **Code** button located in the middle of the page.
-1. Click the **Codespaces** tab on the box that pops up.
-1. Click the **Create codespace on main** button.
+- Every engine takes numpy arrays and returns plain dataclasses. No hidden
+  global state — easy to unit test and to feed from a backtester later.
+- Confidence score is **probability + expectancy gated**: a high-probability
+  setup is still rejected if expectancy ≤ 0.
+- The mock adapter generates correlated US100 / SPX synthetic series using a
+  two-factor model so the correlation and lead-lag engines have realistic
+  inputs during development.
+- Nothing here guarantees returns. The system's job is to quantify edge and
+  refuse bad trades.
 
-   **Wait about 2 minutes for the codespace to spin itself up.**
+## License
 
-1. Verify your codespace is running. The browser should contain a VS Code web-based editor and a terminal should be present such as the below:
-   ![Screen Shot 2023-03-09 at 9 09 07 AM](https://user-images.githubusercontent.com/26442605/224102962-d0222578-3f10-4566-856d-8d59f28fcf2e.png)
-1. The `copilot` extension should show up in the VS Code extension list. Click the extensions sidebar tab. You should see the following:
-   ![Screen Shot 2023-03-09 at 9 04 13 AM](https://user-images.githubusercontent.com/26442605/224102514-7d6d2f51-f435-401d-a529-7bae3ae3e511.png)
-
-**Wait about 60 seconds then refresh your repository landing page for the next step.**
-
-<footer>
-
-<!--
-  <<< Author notes: Footer >>>
-  Add a link to get support, GitHub status page, code of conduct, license link.
--->
-
----
-
-Get help: [Post in our discussion board](https://github.com/orgs/skills/discussions/categories/code-with-copilot) &bull; [Review the GitHub status page](https://www.githubstatus.com/)
-
-&copy; 2023 GitHub &bull; [Code of Conduct](https://www.contributor-covenant.org/version/2/1/code_of_conduct/code_of_conduct.md) &bull; [MIT License](https://gh.io/mit)
-
-</footer>
+MIT — see `LICENSE`.
