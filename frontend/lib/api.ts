@@ -1,7 +1,54 @@
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-export const WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws/signals";
+/**
+ * Derive API/WS URLs at runtime so the frontend works everywhere:
+ * - With env overrides (self-hosted / prod)
+ * - On GitHub Codespaces (where port 3000 and 8000 get different forwarded hostnames like
+ *   `<name>-3000.app.github.dev` and `<name>-8000.app.github.dev`)
+ * - On localhost dev
+ */
+function deriveUrls(): { api: string; ws: string } {
+  const envApi = process.env.NEXT_PUBLIC_API_URL;
+  const envWs = process.env.NEXT_PUBLIC_WS_URL;
+  if (envApi && envWs) return { api: envApi, ws: envWs };
+
+  if (typeof window !== "undefined") {
+    const { protocol, hostname, port } = window.location;
+    const wsProto = protocol === "https:" ? "wss:" : "ws:";
+
+    // Codespaces: swap -3000 for -8000 in the forwarded hostname
+    const cs = hostname.match(/^(.*)-(\d+)\.app\.github\.dev$/);
+    if (cs) {
+      const backendHost = `${cs[1]}-8000.app.github.dev`;
+      return {
+        api: `${protocol}//${backendHost}`,
+        ws: `${wsProto}//${backendHost}/ws/signals`,
+      };
+    }
+
+    // localhost dev: frontend on 3000, backend on 8000
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return {
+        api: `${protocol}//${hostname}:8000`,
+        ws: `${wsProto}//${hostname}:8000/ws/signals`,
+      };
+    }
+
+    // Same-host deployment with backend reverse-proxied on the same origin
+    const host = port ? `${hostname}:${port}` : hostname;
+    return {
+      api: `${protocol}//${host}`,
+      ws: `${wsProto}//${host}/ws/signals`,
+    };
+  }
+
+  return {
+    api: envApi ?? "http://localhost:8000",
+    ws: envWs ?? "ws://localhost:8000/ws/signals",
+  };
+}
+
+const urls = deriveUrls();
+export const API_URL = urls.api;
+export const WS_URL = urls.ws;
 
 export type CorrelationReport = {
   coefficient: number;
