@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mercer & Vale — Command Center</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  html, body, #root { background:#0b0d10; color:#e6e9ef; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .card { background:#12151a; border:1px solid #1e2329; border-radius:14px; }
+  .chip { background:#171b21; border:1px solid #232932; border-radius:999px; padding:2px 10px; font-size:11px; }
+  .pos { color:#22c55e; } .neg { color:#ef4444; } .muted { color:#7b8391; }
+  .row:hover { background:#161a20; }
+  .tab-active { background:#1a1f27; color:#fff; }
+  .gridline { border-color:#1e2329; }
+  .scroll::-webkit-scrollbar { width:6px; height:6px; }
+  .scroll::-webkit-scrollbar-thumb { background:#232932; border-radius:3px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* ---------- MOCK DATA (replace with API later) ---------- */
+const MOCK = {
+  kpis: { sent: 7840, opened: 3612, replied: 284, positive: 61, booked: 17 },
+  weekly: [
+    { d:"Mon", sent:920, opened:430, replied:38, booked:2 },
+    { d:"Tue", sent:1180, opened:520, replied:45, booked:3 },
+    { d:"Wed", sent:1090, opened:495, replied:41, booked:2 },
+    { d:"Thu", sent:1230, opened:560, replied:50, booked:3 },
+    { d:"Fri", sent:1250, opened:575, replied:52, booked:4 },
+    { d:"Sat", sent:1060, opened:480, replied:33, booked:2 },
+    { d:"Sun", sent:1110, opened:552, replied:25, booked:1 },
+  ],
+  campaigns: [
+    { id:"c1", name:"Cleaning — TX + FL (Owners)", status:"running", daily:250, sent:2140, reply:4.2, booked:7 },
+    { id:"c2", name:"Cleaning — Northeast (CEOs)", status:"running", daily:180, sent:1720, reply:3.7, booked:4 },
+    { id:"c3", name:"MSPs — 20-100 emp", status:"paused", daily:0, sent:980, reply:2.9, booked:2 },
+    { id:"c4", name:"Roofing — Commercial", status:"running", daily:150, sent:640, reply:5.1, booked:4 },
+  ],
+  leads: [
+    { id:1, name:"James O'Connor", title:"Owner", company:"Brightline Facilities", email:"james@brightline.co", status:"booked", campaign:"c1" },
+    { id:2, name:"Priya Shah", title:"CEO", company:"Metro Clean Group", email:"priya@metroclean.com", status:"replied", campaign:"c1" },
+    { id:3, name:"David Tran", title:"President", company:"Evercore Janitorial", email:"dtran@evercore.io", status:"contacted", campaign:"c2" },
+    { id:4, name:"Sara Bennett", title:"Founder", company:"Atlas MSP", email:"sara@atlasmsp.com", status:"contacted", campaign:"c3" },
+    { id:5, name:"Mike Alvarez", title:"Owner", company:"Summit Roofing Co", email:"mike@summitroof.com", status:"booked", campaign:"c4" },
+    { id:6, name:"Lauren Hill", title:"VP Ops", company:"Pure Facilities", email:"lauren@pure.fm", status:"replied", campaign:"c1" },
+    { id:7, name:"Noah Patel", title:"CEO", company:"Northbound MSP", email:"noah@nbmsp.com", status:"contacted", campaign:"c3" },
+    { id:8, name:"Carla Reyes", title:"Owner", company:"Clearview Clean", email:"carla@clearview.co", status:"contacted", campaign:"c2" },
+  ],
+  inbox: [
+    { id:"m1", from:"Priya Shah", company:"Metro Clean Group", snippet:"Interesting — send me the Loom, open to a 15-min call next week.", type:"positive", at:"09:12" },
+    { id:"m2", from:"Lauren Hill", company:"Pure Facilities", snippet:"What's your pricing and do you have cleaning case studies?", type:"needs_response", at:"08:44" },
+    { id:"m3", from:"James O'Connor", company:"Brightline Facilities", snippet:"Booked for Thursday 2pm. Looking forward to it.", type:"positive", at:"Yesterday" },
+    { id:"m4", from:"Derek Mills", company:"Onyx Services", snippet:"Not interested, please remove.", type:"negative", at:"Yesterday" },
+    { id:"m5", from:"Sara Bennett", company:"Atlas MSP", snippet:"Can you send more info on the guarantee?", type:"needs_response", at:"2d" },
+  ],
+};
+
+/* ---------- HELPERS ---------- */
+const pct = (n, d) => d ? (n/d*100).toFixed(1) + "%" : "0%";
+const fmt = (n) => n.toLocaleString();
+
+/* ---------- SHARED COMPONENTS ---------- */
+function Stat({ label, value, sub, tone }) {
+  const toneCls = tone === "pos" ? "pos" : tone === "neg" ? "neg" : "";
+  return (
+    <div className="card p-4">
+      <div className="muted text-xs uppercase tracking-wider">{label}</div>
+      <div className="text-2xl font-semibold mt-1">{value}</div>
+      {sub && <div className={`text-xs mt-1 ${toneCls}`}>{sub}</div>}
+    </div>
+  );
+}
+
+function StatusPill({ s }) {
+  const map = {
+    running: "bg-green-500/10 text-green-400 border-green-500/30",
+    paused:  "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
+    booked:  "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+    replied: "bg-sky-500/10 text-sky-400 border-sky-500/30",
+    contacted: "bg-zinc-500/10 text-zinc-300 border-zinc-500/30",
+    positive: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+    needs_response: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+    negative: "bg-red-500/10 text-red-400 border-red-500/30",
+  };
+  return <span className={`chip border ${map[s] || ""}`}>{s.replace("_"," ")}</span>;
+}
+
+/* ---------- CHARTS ---------- */
+function WeeklyChart({ data }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const ctx = ref.current.getContext("2d");
+    const chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: data.map(d => d.d),
+        datasets: [
+          { label:"Sent", data: data.map(d=>d.sent), borderColor:"#22d3ee", backgroundColor:"rgba(34,211,238,0.08)", tension:.35, fill:true, pointRadius:0 },
+          { label:"Opened", data: data.map(d=>d.opened), borderColor:"#a78bfa", backgroundColor:"rgba(167,139,250,0.08)", tension:.35, fill:true, pointRadius:0 },
+          { label:"Replied", data: data.map(d=>d.replied*20), borderColor:"#22c55e", backgroundColor:"rgba(34,197,94,0.08)", tension:.35, fill:true, pointRadius:0 },
+        ],
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ labels:{ color:"#8a93a1", boxWidth:8 }}},
+        scales:{
+          x:{ ticks:{ color:"#6b7280" }, grid:{ color:"#1e2329" }},
+          y:{ ticks:{ color:"#6b7280" }, grid:{ color:"#1e2329" }},
+        },
+      },
+    });
+    return () => chart.destroy();
+  }, [data]);
+  return <canvas ref={ref} />;
+}
+
+function Funnel({ k }) {
+  const stages = [
+    { label:"Sent",     v:k.sent,     color:"#22d3ee" },
+    { label:"Opened",   v:k.opened,   color:"#a78bfa" },
+    { label:"Replied",  v:k.replied,  color:"#22c55e" },
+    { label:"Positive", v:k.positive, color:"#f59e0b" },
+    { label:"Booked",   v:k.booked,   color:"#10b981" },
+  ];
+  const max = stages[0].v;
+  return (
+    <div className="space-y-2">
+      {stages.map((s,i) => {
+        const prev = i===0 ? s.v : stages[i-1].v;
+        const conv = i===0 ? null : pct(s.v, prev);
+        return (
+          <div key={s.label} className="flex items-center gap-3">
+            <div className="w-20 text-xs muted">{s.label}</div>
+            <div className="flex-1 h-7 rounded-md bg-[#0f1216] overflow-hidden relative">
+              <div style={{ width:`${(s.v/max)*100}%`, background:s.color, opacity:.85 }} className="h-full" />
+              <div className="absolute inset-0 flex items-center justify-between px-3 text-xs">
+                <span>{fmt(s.v)}</span>
+                {conv && <span className="muted">{conv}</span>}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------- SECTIONS ---------- */
+function Overview({ k, weekly }) {
+  const openRate = pct(k.opened, k.sent);
+  const replyRate = pct(k.replied, k.sent);
+  const bookRate = pct(k.booked, k.replied);
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Stat label="Emails Sent" value={fmt(k.sent)} sub="+12% WoW" tone="pos" />
+        <Stat label="Open Rate" value={openRate} sub="industry: 35%" tone="pos" />
+        <Stat label="Reply Rate" value={replyRate} sub="target: 3%+" tone="pos" />
+        <Stat label="Positive" value={fmt(k.positive)} sub={`${pct(k.positive,k.replied)} of replies`} />
+        <Stat label="Meetings Booked" value={fmt(k.booked)} sub={`book rate ${bookRate}`} tone="pos" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="card p-4 lg:col-span-2">
+          <div className="flex items-center justify-between mb-3">
+            <div className="font-medium">Last 7 days</div>
+            <div className="text-xs muted">Sent / Opened / Replied (×20)</div>
+          </div>
+          <div style={{ height:260 }}><WeeklyChart data={weekly} /></div>
+        </div>
+        <div className="card p-4">
+          <div className="font-medium mb-3">Funnel</div>
+          <Funnel k={k} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Campaigns({ list, setList }) {
+  const toggle = (id) => setList(list.map(c => c.id===id ? { ...c, status: c.status==="running" ? "paused" : "running", daily: c.status==="running" ? 0 : 200 } : c));
+  return (
+    <div className="card">
+      <div className="p-4 flex items-center justify-between border-b gridline">
+        <div className="font-medium">Active Campaigns</div>
+        <button className="chip border border-[#2a313b] hover:bg-[#1a1f27]">+ New</button>
+      </div>
+      <div className="overflow-x-auto scroll">
+        <table className="w-full text-sm">
+          <thead className="text-xs muted uppercase">
+            <tr className="text-left">
+              <th className="px-4 py-2">Name</th>
+              <th className="px-4 py-2">Status</th>
+              <th className="px-4 py-2">Daily</th>
+              <th className="px-4 py-2">Sent</th>
+              <th className="px-4 py-2">Reply %</th>
+              <th className="px-4 py-2">Booked</th>
+              <th className="px-4 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map(c => (
+              <tr key={c.id} className="row border-t gridline">
+                <td className="px-4 py-3">{c.name}</td>
+                <td className="px-4 py-3"><StatusPill s={c.status} /></td>
+                <td className="px-4 py-3">{c.daily}</td>
+                <td className="px-4 py-3">{fmt(c.sent)}</td>
+                <td className="px-4 py-3">{c.reply}%</td>
+                <td className="px-4 py-3">{c.booked}</td>
+                <td className="px-4 py-3 text-right">
+                  <button onClick={()=>toggle(c.id)} className="chip border border-[#2a313b] hover:bg-[#1a1f27]">
+                    {c.status==="running" ? "Pause" : "Start"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Leads({ leads, setLeads, campaigns }) {
+  const [filter, setFilter] = useState("all");
+  const filtered = leads.filter(l => filter==="all" ? true : l.status===filter);
+  const cycle = (s) => s==="contacted" ? "replied" : s==="replied" ? "booked" : "contacted";
+  const bump = (id) => setLeads(leads.map(l => l.id===id ? { ...l, status: cycle(l.status) } : l));
+  return (
+    <div className="card">
+      <div className="p-4 flex flex-wrap items-center gap-2 border-b gridline">
+        <div className="font-medium mr-auto">Leads</div>
+        {["all","contacted","replied","booked"].map(f => (
+          <button key={f} onClick={()=>setFilter(f)} className={`chip border border-[#2a313b] ${filter===f?"tab-active":""}`}>{f}</button>
+        ))}
+      </div>
+      <div className="overflow-x-auto scroll">
+        <table className="w-full text-sm">
+          <thead className="text-xs muted uppercase">
+            <tr className="text-left">
+              <th className="px-4 py-2">Name</th>
+              <th className="px-4 py-2 hidden md:table-cell">Title</th>
+              <th className="px-4 py-2">Company</th>
+              <th className="px-4 py-2 hidden lg:table-cell">Email</th>
+              <th className="px-4 py-2">Status</th>
+              <th className="px-4 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(l => (
+              <tr key={l.id} className="row border-t gridline">
+                <td className="px-4 py-3">{l.name}</td>
+                <td className="px-4 py-3 hidden md:table-cell muted">{l.title}</td>
+                <td className="px-4 py-3">{l.company}</td>
+                <td className="px-4 py-3 hidden lg:table-cell muted">{l.email}</td>
+                <td className="px-4 py-3"><StatusPill s={l.status} /></td>
+                <td className="px-4 py-3 text-right">
+                  <button onClick={()=>bump(l.id)} className="chip border border-[#2a313b] hover:bg-[#1a1f27]">Advance</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Inbox({ items, onResolve }) {
+  return (
+    <div className="card">
+      <div className="p-4 border-b gridline font-medium">Inbox Feed</div>
+      <div className="divide-y" style={{ borderColor:"#1e2329" }}>
+        {items.map(m => (
+          <div key={m.id} className="p-4 flex gap-3 items-start row">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <div className="font-medium">{m.from}</div>
+                <div className="muted text-xs">· {m.company}</div>
+                <div className="muted text-xs ml-auto">{m.at}</div>
+              </div>
+              <div className="text-sm mt-1">{m.snippet}</div>
+              <div className="mt-2 flex gap-2">
+                <StatusPill s={m.type} />
+                {m.type!=="negative" && <button onClick={()=>onResolve(m.id)} className="chip border border-[#2a313b] hover:bg-[#1a1f27]">Send calendar link</button>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Metrics({ k, weekly }) {
+  const totals = weekly.reduce((a,b)=>({ sent:a.sent+b.sent, opened:a.opened+b.opened, replied:a.replied+b.replied, booked:a.booked+b.booked }), {sent:0,opened:0,replied:0,booked:0});
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Stat label="7d Sent" value={fmt(totals.sent)} />
+        <Stat label="7d Open Rate" value={pct(totals.opened, totals.sent)} tone="pos" />
+        <Stat label="7d Reply Rate" value={pct(totals.replied, totals.sent)} tone="pos" />
+        <Stat label="7d Booked" value={fmt(totals.booked)} sub="meetings" />
+      </div>
+      <div className="card p-4">
+        <div className="font-medium mb-3">Conversion Funnel (lifetime)</div>
+        <Funnel k={k} />
+      </div>
+      <div className="card p-4">
+        <div className="font-medium mb-3">Per-stage conversion</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Stat label="Open → Reply" value={pct(k.replied, k.opened)} />
+          <Stat label="Reply → Positive" value={pct(k.positive, k.replied)} />
+          <Stat label="Positive → Booked" value={pct(k.booked, k.positive)} />
+          <Stat label="Sent → Booked" value={pct(k.booked, k.sent)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- APP SHELL ---------- */
+function App() {
+  const [tab, setTab] = useState("overview");
+  const [campaigns, setCampaigns] = useState(MOCK.campaigns);
+  const [leads, setLeads] = useState(MOCK.leads);
+  const [inbox, setInbox] = useState(MOCK.inbox);
+
+  const kpis = useMemo(() => {
+    const booked = leads.filter(l=>l.status==="booked").length + MOCK.kpis.booked - 2;
+    return { ...MOCK.kpis, booked };
+  }, [leads]);
+
+  const resolve = (id) => setInbox(inbox.filter(m => m.id!==id));
+
+  const tabs = [
+    { id:"overview",  label:"Overview" },
+    { id:"campaigns", label:"Campaigns" },
+    { id:"leads",     label:"Leads" },
+    { id:"inbox",     label:"Inbox" },
+    { id:"metrics",   label:"Metrics" },
+  ];
+
+  return (
+    <div className="min-h-screen">
+      <header className="border-b gridline">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg" style={{ background:"linear-gradient(135deg,#22d3ee,#a78bfa)" }}></div>
+          <div>
+            <div className="font-semibold tracking-tight">Mercer & Vale</div>
+            <div className="text-xs muted -mt-0.5">Command Center</div>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="chip border border-[#2a313b]"><span className="pos">●</span> live</span>
+            <span className="chip border border-[#2a313b] hidden sm:inline">Mon 09:41</span>
+          </div>
+        </div>
+        <nav className="max-w-7xl mx-auto px-2 flex gap-1 overflow-x-auto scroll">
+          {tabs.map(t => (
+            <button key={t.id} onClick={()=>setTab(t.id)}
+              className={`px-3 py-2 text-sm rounded-md ${tab===t.id ? "tab-active" : "muted hover:text-white"}`}>
+              {t.label}
+            </button>
+          ))}
+        </nav>
+      </header>
+      <main className="max-w-7xl mx-auto px-4 py-5">
+        {tab==="overview"  && <Overview k={kpis} weekly={MOCK.weekly} />}
+        {tab==="campaigns" && <Campaigns list={campaigns} setList={setCampaigns} />}
+        {tab==="leads"     && <Leads leads={leads} setLeads={setLeads} campaigns={campaigns} />}
+        {tab==="inbox"     && <Inbox items={inbox} onResolve={resolve} />}
+        {tab==="metrics"   && <Metrics k={kpis} weekly={MOCK.weekly} />}
+      </main>
+      <footer className="max-w-7xl mx-auto px-4 py-6 muted text-xs">
+        v0.1 — mock data. Wire <code>/api/*</code> to replace <code>MOCK</code>.
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
