@@ -8,10 +8,11 @@ import {
   AdaptiveEvents,
 } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, type MutableRefObject } from "react";
 import { DreamStar } from "./dream-star";
 import { ConstellationLines } from "./constellation-lines";
 import { ThreadConstellations } from "./thread-constellations";
+import { ExportBridge, type ExportHandle } from "./export-bridge";
 import { type Dream, positionFor } from "@/lib/dreams";
 import { computeEdges } from "@/lib/constellations";
 import { placeThreads, type Thread } from "@/lib/threads";
@@ -28,6 +29,8 @@ type Props = {
   threads?: Thread[];
   /** When set, only this thread renders (and symbol arcs hide). */
   selectedThreadId?: string | null;
+  /** Exposes the live canvas for wallpaper export. */
+  exportRef?: MutableRefObject<ExportHandle | null>;
 };
 
 export function GalaxyCanvas({
@@ -38,6 +41,7 @@ export function GalaxyCanvas({
   symbolFilter = null,
   threads = [],
   selectedThreadId = null,
+  exportRef,
 }: Props) {
   const placed = useMemo(
     () => dreams.map((d, i) => ({ d, p: positionFor(d, i) })),
@@ -63,9 +67,12 @@ export function GalaxyCanvas({
     <Canvas
       camera={{ position: [0, 4, 18], fov: 55 }}
       dpr={[1, 1.6]}
-      gl={{ antialias: true, alpha: true }}
+      // preserveDrawingBuffer lets us read the rendered pixels via toDataURL()
+      // for wallpaper export. Slight perf cost; negligible at this scene size.
+      gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
       onPointerMissed={() => onSelect(null)}
     >
+      {exportRef && <ExportBridge apiRef={exportRef} />}
       <ambientLight intensity={0.5} />
 
       <Suspense fallback={null}>

@@ -1,15 +1,34 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Search, Bell, Plus } from "lucide-react";
+import { Search, Bell, Plus, Download, Check, Loader2 } from "lucide-react";
+import { useState } from "react";
 import { NeonButton } from "@/components/ui/neon-button";
 import { UserMenu } from "@/components/layout/user-menu";
 
 type Props = {
   onNewDream: () => void;
+  onExport: () => Promise<void> | void;
 };
 
-export function Topbar({ onNewDream }: Props) {
+type ExportStatus = "idle" | "saving" | "done" | "error";
+
+export function Topbar({ onNewDream, onExport }: Props) {
+  const [status, setStatus] = useState<ExportStatus>("idle");
+
+  async function handleExport() {
+    if (status === "saving") return;
+    setStatus("saving");
+    try {
+      await onExport();
+      setStatus("done");
+      setTimeout(() => setStatus("idle"), 1800);
+    } catch {
+      setStatus("error");
+      setTimeout(() => setStatus("idle"), 2400);
+    }
+  }
+
   return (
     <header className="z-30 flex w-full items-center justify-between gap-4 px-6 pt-5">
       <div className="flex items-center gap-3">
@@ -45,6 +64,29 @@ export function Topbar({ onNewDream }: Props) {
       </div>
 
       <div className="flex items-center gap-2">
+        <button
+          onClick={handleExport}
+          disabled={status === "saving"}
+          aria-label="Export wallpaper"
+          title="Export your galaxy as a wallpaper"
+          className="relative flex h-10 w-10 items-center justify-center rounded-xl glass text-white/70 transition-colors hover:text-white focus-aurora disabled:opacity-70"
+        >
+          {status === "saving" ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : status === "done" ? (
+            <Check
+              size={16}
+              className="text-nebula-lime"
+              style={{ filter: "drop-shadow(0 0 6px rgba(74,222,128,0.7))" }}
+            />
+          ) : (
+            <Download size={16} />
+          )}
+          {status === "error" && (
+            <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.8)]" />
+          )}
+        </button>
+
         <button
           aria-label="Notifications"
           className="relative flex h-10 w-10 items-center justify-center rounded-xl glass text-white/70 transition-colors hover:text-white focus-aurora"

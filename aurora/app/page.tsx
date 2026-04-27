@@ -1,13 +1,16 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Sidebar, type GalaxyMode } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { DreamDetail } from "@/components/dreams/dream-detail";
 import { NewDreamModal } from "@/components/dreams/new-dream-modal";
 import { StatStrip, EmotionLegend } from "@/components/dreams/stat-strip";
 import { ConstellationPanel } from "@/components/dreams/constellation-panel";
+import { type ExportHandle } from "@/components/galaxy/export-bridge";
+import { exportGalaxyImage } from "@/lib/export-galaxy";
 import { type Dream } from "@/lib/dreams";
 import { type Thread } from "@/lib/threads";
 import { motion } from "framer-motion";
@@ -27,6 +30,7 @@ const GalaxyCanvas = dynamic(
 );
 
 export default function Home() {
+  const { data: session } = useSession();
   const [dreams, setDreams] = useState<Dream[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -37,6 +41,20 @@ export default function Home() {
   const [threadsLoading, setThreadsLoading] = useState(false);
   const [threadsError, setThreadsError] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+
+  const exportRef = useRef<ExportHandle | null>(null);
+
+  async function handleExport() {
+    const canvas = exportRef.current?.getCanvas();
+    if (!canvas) {
+      throw new Error("Galaxy isn't ready yet.");
+    }
+    const userLabel =
+      session?.user?.name?.trim() ||
+      session?.user?.email?.split("@")[0] ||
+      "anonymous dreamer";
+    await exportGalaxyImage({ canvas, userLabel });
+  }
 
   async function revealThreads() {
     if (threadsLoading) return;
@@ -122,7 +140,10 @@ export default function Home() {
         />
 
         <div className="relative flex flex-1 flex-col">
-          <Topbar onNewDream={() => setModalOpen(true)} />
+          <Topbar
+            onNewDream={() => setModalOpen(true)}
+            onExport={handleExport}
+          />
 
           <motion.div
             initial={{ opacity: 0 }}
@@ -139,6 +160,7 @@ export default function Home() {
                 symbolFilter={symbolFilter}
                 threads={threads}
                 selectedThreadId={selectedThreadId}
+                exportRef={exportRef}
               />
             )}
 
