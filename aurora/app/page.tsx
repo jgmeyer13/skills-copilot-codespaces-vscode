@@ -74,6 +74,13 @@ export default function Home() {
             <DreamDetail
               dream={selected}
               onClose={() => setSelectedId(null)}
+              onUpdateInterpretation={(id, text) =>
+                setDreams((prev) =>
+                  prev.map((d) =>
+                    d.id === id ? { ...d, interpretation: text } : d,
+                  ),
+                )
+              }
             />
 
             {/* Subtle vignette */}

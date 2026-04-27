@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Sparkles, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   type Emotion,
   EMOTION_COLOR,
@@ -10,12 +10,21 @@ import {
   type Dream,
 } from "@/lib/dreams";
 import { NeonButton } from "@/components/ui/neon-button";
+import { streamInterpret } from "@/lib/stream";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   onCreate: (dream: Dream) => void;
 };
+
+const SYMBOL_REGEX =
+  /\b(water|fire|sky|light|dark|house|door|fall|fly|mirror|train|book|garden|ocean|moon|sun|forest|river|ice|snow|stars?|child|animal|bird|wolf|cat|dog|maze|tunnel|bridge|key|clock|letter|song)\b/g;
+
+function extractSymbols(body: string): string[] {
+  const matches = body.toLowerCase().match(SYMBOL_REGEX) ?? [];
+  return Array.from(new Set(matches)).slice(0, 6);
+}
 
 const ALL_EMOTIONS: Emotion[] = [
   "wonder",
@@ -33,27 +42,58 @@ export function NewDreamModal({ open, onClose, onCreate }: Props) {
   const [emotion, setEmotion] = useState<Emotion>("wonder");
   const [vividness, setVividness] = useState(7);
   const [submitting, setSubmitting] = useState(false);
+  const [streamedText, setStreamedText] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   function reset() {
     setTitle("");
     setBody("");
     setEmotion("wonder");
     setVividness(7);
+    setStreamedText("");
+    setError(null);
+  }
+
+  function handleClose() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    onClose();
   }
 
   async function handleSubmit() {
-    if (!title.trim() || !body.trim()) return;
+    if (!title.trim() || !body.trim() || submitting) return;
     setSubmitting(true);
-    // Simulated AI parse delay so the shimmer feels real.
-    await new Promise((r) => setTimeout(r, 900));
+    setStreamedText("");
+    setError(null);
 
-    const symbols = Array.from(
-      new Set(
-        body
-          .toLowerCase()
-          .match(/\b(water|fire|sky|light|dark|house|door|fall|fly|mirror|train|book|garden|ocean|moon|sun|forest)\b/g) ?? [],
-      ),
-    ).slice(0, 5);
+    const ac = new AbortController();
+    abortRef.current = ac;
+
+    let accumulated = "";
+    const FALLBACK =
+      "Your unconscious left a fingerprint here — keep watching for this pattern over the next few entries.";
+
+    try {
+      for await (const delta of streamInterpret(
+        {
+          title: title.trim(),
+          body: body.trim(),
+          emotion,
+          vividness,
+        },
+        ac.signal,
+      )) {
+        accumulated += delta;
+        setStreamedText(accumulated);
+      }
+    } catch (e) {
+      if (ac.signal.aborted) return; // user closed mid-stream
+      const msg = e instanceof Error ? e.message : "AI request failed";
+      setError(msg);
+      // Soft-fall back so the dream is still saved.
+      if (!accumulated) accumulated = FALLBACK;
+    }
 
     const dream: Dream = {
       id: `d-${Date.now().toString(36)}`,
@@ -62,9 +102,10 @@ export function NewDreamModal({ open, onClose, onCreate }: Props) {
       emotion,
       vividness,
       date: new Date().toISOString(),
-      symbols: symbols.length ? symbols : ["dream"],
-      interpretation:
-        "Your subconscious left a fingerprint here — keep watching for this pattern over the next few entries.",
+      symbols: extractSymbols(body).length
+        ? extractSymbols(body)
+        : ["dream"],
+      interpretation: (accumulated || FALLBACK).trim(),
     };
 
     onCreate(dream);
@@ -82,7 +123,7 @@ export function NewDreamModal({ open, onClose, onCreate }: Props) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            onClick={onClose}
+            onClick={submitting ? undefined : handleClose}
             className="fixed inset-0 z-40 bg-black/55 backdrop-blur-md"
           />
 
@@ -111,7 +152,7 @@ export function NewDreamModal({ open, onClose, onCreate }: Props) {
                   </h2>
                 </div>
                 <button
-                  onClick={onClose}
+                  onClick={handleClose}
                   className="text-white/45 transition-colors hover:text-white"
                   aria-label="Close"
                 >
@@ -203,8 +244,46 @@ export function NewDreamModal({ open, onClose, onCreate }: Props) {
                 </div>
               </div>
 
+              {/* Live interpretation preview while streaming */}
+              <AnimatePresence>
+                {(submitting || streamedText) && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="mt-5 overflow-hidden"
+                  >
+                    <div className="rounded-xl border border-white/8 bg-gradient-to-br from-nebula-violet/10 via-transparent to-nebula-cyan/10 p-3.5">
+                      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.2em] text-white/55">
+                        <Sparkles
+                          size={11}
+                          className="text-nebula-violet-soft animate-pulse-glow"
+                        />
+                        Aurora is reading your dream
+                      </div>
+                      <p className="text-sm leading-relaxed text-white/85 whitespace-pre-wrap">
+                        {streamedText}
+                        {submitting && (
+                          <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse bg-nebula-violet-soft align-middle" />
+                        )}
+                      </p>
+                      {error && (
+                        <p className="mt-2 text-[11px] text-rose-300/80">
+                          {error}
+                        </p>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <div className="mt-6 flex items-center justify-end gap-2">
-                <NeonButton variant="ghost" onClick={onClose}>
+                <NeonButton
+                  variant="ghost"
+                  onClick={handleClose}
+                  disabled={submitting}
+                >
                   Cancel
                 </NeonButton>
                 <NeonButton
@@ -215,7 +294,7 @@ export function NewDreamModal({ open, onClose, onCreate }: Props) {
                   {submitting ? (
                     <>
                       <Loader2 size={14} className="animate-spin" />
-                      Generating star…
+                      Interpreting…
                     </>
                   ) : (
                     <>
