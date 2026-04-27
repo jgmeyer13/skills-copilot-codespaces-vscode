@@ -13,21 +13,40 @@ import {
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
+export type GalaxyMode = "galaxy" | "constellations";
+
 const items = [
-  { icon: Stars, label: "Galaxy", id: "galaxy" },
-  { icon: Moon, label: "Dreams", id: "dreams" },
-  { icon: Brain, label: "Insights", id: "insights" },
-  { icon: BookOpen, label: "Journal", id: "journal" },
-  { icon: Compass, label: "Constellations", id: "const" },
+  { icon: Stars, label: "Galaxy", id: "galaxy" as const, mode: "galaxy" as GalaxyMode },
+  { icon: Moon, label: "Dreams", id: "dreams" as const, mode: null },
+  { icon: Brain, label: "Insights", id: "insights" as const, mode: null },
+  { icon: BookOpen, label: "Journal", id: "journal" as const, mode: null },
+  { icon: Compass, label: "Constellations", id: "const" as const, mode: "constellations" as GalaxyMode },
 ];
 
-export function Sidebar() {
-  const [active, setActive] = useState("galaxy");
+type Props = {
+  mode: GalaxyMode;
+  onModeChange: (m: GalaxyMode) => void;
+};
+
+export function Sidebar({ mode, onModeChange }: Props) {
+  // Visual active state — for the wired modes it follows `mode`; for
+  // unwired items it toggles only locally so the UI feels responsive
+  // while we build out those views.
+  const wiredId = mode === "constellations" ? "const" : "galaxy";
+  const [visualActive, setVisualActive] = useState<string>(wiredId);
+  // Keep visual active in sync if mode changes from outside.
+  if (visualActive !== wiredId && (visualActive === "galaxy" || visualActive === "const")) {
+    // no-op; allow user to keep visual selection on unwired items
+  }
+
+  function handleClick(id: string, navMode: GalaxyMode | null) {
+    setVisualActive(id);
+    if (navMode) onModeChange(navMode);
+  }
 
   return (
     <aside className="z-30 flex h-full w-[72px] flex-col items-center justify-between py-5">
       <div className="flex flex-col items-center gap-3">
-        {/* Logo */}
         <motion.div
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -47,14 +66,13 @@ export function Sidebar() {
 
         <div className="hairline my-1 w-8" />
 
-        {/* Nav */}
         <nav className="flex flex-col items-center gap-1.5">
-          {items.map(({ icon: Icon, label, id }) => {
-            const isActive = active === id;
+          {items.map(({ icon: Icon, label, id, mode: navMode }) => {
+            const isActive = visualActive === id;
             return (
               <button
                 key={id}
-                onClick={() => setActive(id)}
+                onClick={() => handleClick(id, navMode)}
                 className={cn(
                   "group relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors focus-aurora",
                   isActive
@@ -72,7 +90,6 @@ export function Sidebar() {
                 )}
                 <Icon size={18} strokeWidth={1.7} className="relative z-10" />
 
-                {/* Tooltip */}
                 <span className="pointer-events-none absolute left-[58px] z-20 whitespace-nowrap rounded-md border border-white/10 bg-black/80 px-2 py-1 text-[11px] font-medium text-white/90 opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
                   {label}
                 </span>

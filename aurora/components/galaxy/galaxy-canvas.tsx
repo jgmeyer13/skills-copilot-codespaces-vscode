@@ -10,18 +10,35 @@ import {
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { Suspense, useMemo } from "react";
 import { DreamStar } from "./dream-star";
+import { ConstellationLines } from "./constellation-lines";
 import { type Dream, positionFor } from "@/lib/dreams";
+import { computeEdges } from "@/lib/constellations";
 
 type Props = {
   dreams: Dream[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  /** When true, constellation arcs are rendered between stars sharing symbols. */
+  showConstellations?: boolean;
+  /** When set, only edges of this symbol are shown. */
+  symbolFilter?: string | null;
 };
 
-export function GalaxyCanvas({ dreams, selectedId, onSelect }: Props) {
+export function GalaxyCanvas({
+  dreams,
+  selectedId,
+  onSelect,
+  showConstellations = false,
+  symbolFilter = null,
+}: Props) {
   const placed = useMemo(
     () => dreams.map((d, i) => ({ d, p: positionFor(d, i) })),
     [dreams],
+  );
+
+  const edges = useMemo(
+    () => (showConstellations ? computeEdges(dreams, symbolFilter) : []),
+    [dreams, showConstellations, symbolFilter],
   );
 
   return (
@@ -31,11 +48,9 @@ export function GalaxyCanvas({ dreams, selectedId, onSelect }: Props) {
       gl={{ antialias: true, alpha: true }}
       onPointerMissed={() => onSelect(null)}
     >
-      {/* Subtle ambient so non-emissive meshes have a base */}
       <ambientLight intensity={0.5} />
 
       <Suspense fallback={null}>
-        {/* Far starfield — depth */}
         <SkyStars
           radius={120}
           depth={60}
@@ -46,7 +61,9 @@ export function GalaxyCanvas({ dreams, selectedId, onSelect }: Props) {
           speed={0.4}
         />
 
-        {/* Dream stars */}
+        {/* Constellation arcs render BEFORE stars so stars draw on top. */}
+        {showConstellations && <ConstellationLines edges={edges} />}
+
         {placed.map(({ d, p }) => (
           <DreamStar
             key={d.id}
@@ -57,7 +74,6 @@ export function GalaxyCanvas({ dreams, selectedId, onSelect }: Props) {
           />
         ))}
 
-        {/* Bloom — the secret sauce that turns bright pixels into NEON */}
         <EffectComposer multisampling={0}>
           <Bloom
             mipmapBlur

@@ -2,11 +2,12 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
-import { Sidebar } from "@/components/layout/sidebar";
+import { Sidebar, type GalaxyMode } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { DreamDetail } from "@/components/dreams/dream-detail";
 import { NewDreamModal } from "@/components/dreams/new-dream-modal";
 import { StatStrip, EmotionLegend } from "@/components/dreams/stat-strip";
+import { ConstellationPanel } from "@/components/dreams/constellation-panel";
 import { type Dream } from "@/lib/dreams";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
@@ -29,6 +30,8 @@ export default function Home() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [mode, setMode] = useState<GalaxyMode>("galaxy");
+  const [symbolFilter, setSymbolFilter] = useState<string | null>(null);
 
   // Hydrate from the API on mount.
   useEffect(() => {
@@ -70,7 +73,14 @@ export default function Home() {
       </div>
 
       <div className="relative flex h-full w-full">
-        <Sidebar />
+        <Sidebar
+          mode={mode}
+          onModeChange={(m) => {
+            setMode(m);
+            // Clear filter when leaving constellations.
+            if (m !== "constellations") setSymbolFilter(null);
+          }}
+        />
 
         <div className="relative flex flex-1 flex-col">
           <Topbar onNewDream={() => setModalOpen(true)} />
@@ -86,6 +96,8 @@ export default function Home() {
                 dreams={dreams}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
+                showConstellations={mode === "constellations"}
+                symbolFilter={symbolFilter}
               />
             )}
 
@@ -98,6 +110,12 @@ export default function Home() {
 
             <StatStrip dreams={dreams} />
             <EmotionLegend />
+            <ConstellationPanel
+              open={mode === "constellations"}
+              dreams={dreams}
+              symbolFilter={symbolFilter}
+              onSelectSymbol={setSymbolFilter}
+            />
             <DreamDetail
               dream={selected}
               onClose={() => setSelectedId(null)}
