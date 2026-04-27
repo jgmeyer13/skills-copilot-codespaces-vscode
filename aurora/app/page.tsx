@@ -9,6 +9,7 @@ import { NewDreamModal } from "@/components/dreams/new-dream-modal";
 import { StatStrip, EmotionLegend } from "@/components/dreams/stat-strip";
 import { ConstellationPanel } from "@/components/dreams/constellation-panel";
 import { type Dream } from "@/lib/dreams";
+import { type Thread } from "@/lib/threads";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 
@@ -32,6 +33,41 @@ export default function Home() {
   const [loaded, setLoaded] = useState(false);
   const [mode, setMode] = useState<GalaxyMode>("galaxy");
   const [symbolFilter, setSymbolFilter] = useState<string | null>(null);
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const [threadsLoading, setThreadsLoading] = useState(false);
+  const [threadsError, setThreadsError] = useState<string | null>(null);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+
+  async function revealThreads() {
+    if (threadsLoading) return;
+    setThreadsLoading(true);
+    setThreadsError(null);
+    try {
+      const res = await fetch("/api/threads", { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as { threads: Thread[] };
+      setThreads(data.threads ?? []);
+    } catch (e) {
+      setThreadsError(
+        e instanceof Error ? e.message : "Couldn't read threads.",
+      );
+    } finally {
+      setThreadsLoading(false);
+    }
+  }
+
+  // Mutually-exclusive filters — selecting one clears the other.
+  function selectSymbol(s: string | null) {
+    setSymbolFilter(s);
+    if (s) setSelectedThreadId(null);
+  }
+  function selectThread(id: string | null) {
+    setSelectedThreadId(id);
+    if (id) setSymbolFilter(null);
+  }
 
   // Hydrate from the API on mount.
   useEffect(() => {
@@ -77,8 +113,11 @@ export default function Home() {
           mode={mode}
           onModeChange={(m) => {
             setMode(m);
-            // Clear filter when leaving constellations.
-            if (m !== "constellations") setSymbolFilter(null);
+            // Clear filters when leaving constellations.
+            if (m !== "constellations") {
+              setSymbolFilter(null);
+              setSelectedThreadId(null);
+            }
           }}
         />
 
@@ -98,6 +137,8 @@ export default function Home() {
                 onSelect={setSelectedId}
                 showConstellations={mode === "constellations"}
                 symbolFilter={symbolFilter}
+                threads={threads}
+                selectedThreadId={selectedThreadId}
               />
             )}
 
@@ -114,7 +155,13 @@ export default function Home() {
               open={mode === "constellations"}
               dreams={dreams}
               symbolFilter={symbolFilter}
-              onSelectSymbol={setSymbolFilter}
+              onSelectSymbol={selectSymbol}
+              threads={threads}
+              threadsLoading={threadsLoading}
+              threadsError={threadsError}
+              selectedThreadId={selectedThreadId}
+              onSelectThread={selectThread}
+              onRevealThreads={revealThreads}
             />
             <DreamDetail
               dream={selected}

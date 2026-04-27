@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { type Emotion } from "@/lib/dreams";
+import { type Emotion, type Dream } from "@/lib/dreams";
+import { type Thread } from "@/lib/threads";
 
 // Singleton — Anthropic SDK is safe to share across requests.
 let _client: Anthropic | null = null;
@@ -96,4 +97,127 @@ Interpret this dream.`;
       }
     },
   });
+}
+
+// ---------- Latent thread detection ----------------------------------------
+
+const THREADS_SYSTEM_PROMPT = `You are Aurora — a perceptive reader of dream patterns. You find LATENT
+symbolic threads connecting a person's dreams beyond their surface symbols.
+
+Given a list of dreams (each with a title, body, emotion, vividness, and
+explicit symbols), identify 3 to 5 latent thematic threads. Each thread:
+- Is named with 1 to 3 lowercase words (e.g. "thresholds", "lost names",
+  "soft return", "the body remembers").
+- Connects 2 to 6 dreams from the list.
+- Captures a unifying psychological motif the explicit symbols don't already
+  name. Reach for archetypes, emotional currents, or repeated movements
+  rather than restating words from the dreams.
+- Has a one-sentence rationale that quotes nothing — paraphrases the link.
+
+Use only IDs from the input. Return strict JSON. No preamble.`;
+
+const THREADS_SCHEMA = {
+  type: "object",
+  properties: {
+    threads: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "1-3 lowercase words naming the thread",
+          },
+          rationale: {
+            type: "string",
+            description: "One sentence explaining the connection",
+          },
+          dreamIds: {
+            type: "array",
+            items: { type: "string" },
+            description: "2-6 dream IDs participating in this thread",
+          },
+        },
+        required: ["name", "rationale", "dreamIds"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["threads"],
+  additionalProperties: false,
+} as const;
+
+function formatDreamsForLLM(dreams: Dream[]): string {
+  // Truncate body to keep token usage bounded for galaxies that grow large.
+  return dreams
+    .map((d) => {
+      const trimmed = d.body.length > 360 ? d.body.slice(0, 360) + "…" : d.body;
+      return [
+        `id: ${d.id}`,
+        `title: ${d.title}`,
+        `emotion: ${d.emotion}`,
+        `vividness: ${d.vividness}/10`,
+        `symbols: ${d.symbols.join(", ") || "(none)"}`,
+        `body: ${trimmed}`,
+      ].join("\n");
+    })
+    .join("\n---\n");
+}
+
+export async function generateThreads(dreams: Dream[]): Promise<Thread[]> {
+  if (dreams.length < 2) return [];
+
+  const c = client();
+  const response = await c.messages.create({
+    model: "claude-opus-4-7",
+    max_tokens: 2000,
+    thinking: { type: "adaptive" },
+    output_config: {
+      effort: "medium",
+      format: { type: "json_schema", schema: THREADS_SCHEMA },
+    },
+    system: [
+      {
+        type: "text",
+        text: THREADS_SYSTEM_PROMPT,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    messages: [
+      {
+        role: "user",
+        content: `Here are ${dreams.length} dreams. Surface the latent threads.\n\n${formatDreamsForLLM(dreams)}`,
+      },
+    ],
+  });
+
+  // The first text block contains valid JSON conforming to THREADS_SCHEMA.
+  const textBlock = response.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") return [];
+
+  let parsed: { threads?: Array<Omit<Thread, "id">> };
+  try {
+    parsed = JSON.parse(textBlock.text);
+  } catch {
+    return [];
+  }
+
+  if (!parsed.threads || !Array.isArray(parsed.threads)) return [];
+
+  // Add stable IDs (Claude doesn't generate them) + light validation.
+  return parsed.threads
+    .filter(
+      (t) =>
+        typeof t?.name === "string" &&
+        typeof t?.rationale === "string" &&
+        Array.isArray(t?.dreamIds) &&
+        t.dreamIds.length >= 2,
+    )
+    .slice(0, 6)
+    .map((t, i) => ({
+      id: `thread-${i}-${Date.now().toString(36)}`,
+      name: t.name.trim().toLowerCase().slice(0, 32),
+      rationale: t.rationale.trim().slice(0, 280),
+      dreamIds: t.dreamIds.slice(0, 6),
+    }));
 }
