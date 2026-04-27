@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Search, Bell, Plus } from "lucide-react";
 import { NeonButton } from "@/components/ui/neon-button";
+import { UserMenu } from "@/components/layout/user-menu";
 
 type Props = {
   onNewDream: () => void;
@@ -57,9 +58,7 @@ export function Topbar({ onNewDream }: Props) {
           New Dream
         </NeonButton>
 
-        <div className="ml-1 flex h-10 w-10 items-center justify-center rounded-xl glass text-xs font-semibold text-white/80">
-          A
-        </div>
+        <UserMenu />
       </div>
     </header>
   );

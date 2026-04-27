@@ -1,0 +1,36 @@
+// SQLite for zero-config local dev. Swap to Postgres for production by
+// changing the provider to "postgresql" and DATABASE_URL to your Neon URL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String?
+  hashedPassword String
+  createdAt      DateTime @default(now())
+  dreams         Dream[]
+}
+
+model Dream {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  body           String
+  emotion        String
+  vividness      Int
+  // SQLite has no array type — store JSON string, decode in API layer.
+  symbolsJson    String   @default("[]")
+  interpretation String
+  createdAt      DateTime @default(now())
+
+  @@index([userId, createdAt])
+}

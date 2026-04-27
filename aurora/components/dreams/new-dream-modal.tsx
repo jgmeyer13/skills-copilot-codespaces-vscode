@@ -95,18 +95,37 @@ export function NewDreamModal({ open, onClose, onCreate }: Props) {
       if (!accumulated) accumulated = FALLBACK;
     }
 
-    const dream: Dream = {
-      id: `d-${Date.now().toString(36)}`,
+    const symbols = extractSymbols(body);
+    const payload = {
       title: title.trim(),
       body: body.trim(),
       emotion,
       vividness,
-      date: new Date().toISOString(),
-      symbols: extractSymbols(body).length
-        ? extractSymbols(body)
-        : ["dream"],
+      symbols: symbols.length ? symbols : ["dream"],
       interpretation: (accumulated || FALLBACK).trim(),
     };
+
+    // Persist to DB. Fall back to local-only star if the API fails (rare —
+    // mostly happens if the user signed out in another tab).
+    let dream: Dream;
+    try {
+      const res = await fetch("/api/dreams", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as { dream: Dream };
+      dream = data.dream;
+    } catch (e) {
+      console.error("Failed to save dream", e);
+      setError("Couldn't save to your galaxy — showing locally.");
+      dream = {
+        id: `local-${Date.now().toString(36)}`,
+        ...payload,
+        date: new Date().toISOString(),
+      };
+    }
 
     onCreate(dream);
     setSubmitting(false);

@@ -1,17 +1,16 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { DreamDetail } from "@/components/dreams/dream-detail";
 import { NewDreamModal } from "@/components/dreams/new-dream-modal";
 import { StatStrip, EmotionLegend } from "@/components/dreams/stat-strip";
-import { MOCK_DREAMS, type Dream } from "@/lib/dreams";
+import { type Dream } from "@/lib/dreams";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 
-// Three.js / WebGL must be client-only.
 const GalaxyCanvas = dynamic(
   () => import("@/components/galaxy/galaxy-canvas").then((m) => m.GalaxyCanvas),
   {
@@ -26,9 +25,30 @@ const GalaxyCanvas = dynamic(
 );
 
 export default function Home() {
-  const [dreams, setDreams] = useState<Dream[]>(MOCK_DREAMS);
+  const [dreams, setDreams] = useState<Dream[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  // Hydrate from the API on mount.
+  useEffect(() => {
+    const ac = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch("/api/dreams", { signal: ac.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as { dreams: Dream[] };
+        setDreams(data.dreams ?? []);
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") {
+          console.error("Failed to load dreams", e);
+        }
+      } finally {
+        setLoaded(true);
+      }
+    })();
+    return () => ac.abort();
+  }, []);
 
   const selected = useMemo(
     () => dreams.find((d) => d.id === selectedId) ?? null,
@@ -37,7 +57,6 @@ export default function Home() {
 
   return (
     <main className="relative h-screen w-screen overflow-hidden aurora-bg">
-      {/* Slow-drifting nebula blobs behind the 3D scene */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-20 top-10 h-[420px] w-[420px] rounded-full bg-nebula-violet/20 blur-3xl animate-drift" />
         <div
@@ -56,34 +75,51 @@ export default function Home() {
         <div className="relative flex flex-1 flex-col">
           <Topbar onNewDream={() => setModalOpen(true)} />
 
-          {/* The galaxy fills the rest */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1.0, delay: 0.1 }}
             className="relative flex-1"
           >
-            <GalaxyCanvas
-              dreams={dreams}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-            />
+            {loaded && (
+              <GalaxyCanvas
+                dreams={dreams}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+              />
+            )}
+
+            {!loaded && (
+              <div className="absolute inset-0 flex items-center justify-center text-white/40">
+                <Loader2 className="mr-2 animate-spin" size={16} />
+                <span className="text-sm">Loading your galaxy…</span>
+              </div>
+            )}
 
             <StatStrip dreams={dreams} />
             <EmotionLegend />
             <DreamDetail
               dream={selected}
               onClose={() => setSelectedId(null)}
-              onUpdateInterpretation={(id, text) =>
+              onUpdateInterpretation={async (id, text) => {
+                // Optimistic update
                 setDreams((prev) =>
                   prev.map((d) =>
                     d.id === id ? { ...d, interpretation: text } : d,
                   ),
-                )
-              }
+                );
+                try {
+                  await fetch(`/api/dreams/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ interpretation: text }),
+                  });
+                } catch (e) {
+                  console.error("Failed to persist interpretation", e);
+                }
+              }}
             />
 
-            {/* Subtle vignette */}
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgba(0,0,0,0.55)_100%)]" />
           </motion.div>
         </div>
@@ -93,6 +129,7 @@ export default function Home() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onCreate={(d) => {
+          // Modal already POSTed and the returned dream has the server's ID.
           setDreams((prev) => [d, ...prev]);
           setSelectedId(d.id);
         }}
