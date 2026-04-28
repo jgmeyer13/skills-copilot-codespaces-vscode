@@ -1,0 +1,36 @@
+// Postgres — works for both local dev (point at a Neon project) and
+// production (same Neon project, or a separate prod branch).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String?
+  hashedPassword String
+  createdAt      DateTime @default(now())
+  dreams         Dream[]
+}
+
+model Dream {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  body           String
+  emotion        String
+  vividness      Int
+  // SQLite has no array type — store JSON string, decode in API layer.
+  symbolsJson    String   @default("[]")
+  interpretation String
+  createdAt      DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
