@@ -1,12 +1,12 @@
-// SQLite for zero-config local dev. Swap to Postgres for production by
-// changing the provider to "postgresql" and DATABASE_URL to your Neon URL.
+// Postgres — works for both local dev (point at a Neon project) and
+// production (same Neon project, or a separate prod branch).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

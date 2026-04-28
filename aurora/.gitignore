@@ -28,7 +28,7 @@ yarn-error.log*
 # local env files
 .env*.local
 
-# Prisma SQLite database (per-machine state, never commit)
+# Stale SQLite files from earlier dev sessions (Aurora is now Postgres-only)
 /prisma/*.db
 /prisma/*.db-journal
 
