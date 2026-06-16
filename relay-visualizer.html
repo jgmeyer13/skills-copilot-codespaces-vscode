@@ -430,8 +430,8 @@ chips.forEach(c=>c.onclick=()=>{
   beatIdx=idx<0?0:idx; segT= idx===0?0:1;
 });
 
-// kick off
-beatIdx=0; segT=0;
+// kick off — autoplay so the visualizer is immediately alive
+beatIdx=0; segT=0; playing=true; setPlayBtn();
 requestAnimationFrame(tick);
 })();
 </script>
