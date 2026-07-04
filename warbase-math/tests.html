@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Warbase Math Engine — Tests</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { padding: 30px 40px; }
+    h1 { font-family: var(--serif); letter-spacing: 0.06em; }
+    .summary { font-family: var(--serif); font-size: 22px; margin: 14px 0 24px; }
+    .summary.allpass { color: var(--ok); }
+    .summary.hasfail { color: var(--bad); }
+    table { border-collapse: collapse; width: 100%; max-width: 1000px; font-size: 13px; }
+    th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--rule); }
+    th { color: var(--ink-dim); text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
+    td.res { font-weight: 600; width: 60px; }
+    .pass td.res { color: var(--ok); }
+    .fail td.res { color: var(--bad); }
+    .fail { background: rgba(179, 84, 63, 0.08); }
+    td.num { font-variant-numeric: tabular-nums; }
+    .grp td { padding-top: 18px; color: var(--accent-ink); font-family: var(--serif); font-size: 15px; border-bottom: 1px solid var(--rule-strong); }
+  </style>
+</head>
+<body>
+  <h1>Warbase Math Engine — test legion</h1>
+  <div class="summary" id="summary">Running…</div>
+  <table>
+    <thead><tr><th></th><th>Test</th><th>Expected</th><th>Got</th><th>Tolerance</th></tr></thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script src="lib/katex/katex.min.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/solver.js"></script>
+  <script src="js/equations.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    var WB = window.WB;
+    var tbody = document.getElementById("results");
+    var pass = 0, fail = 0;
+
+    function group(name) {
+      var tr = document.createElement("tr");
+      tr.className = "grp";
+      tr.innerHTML = "<td colspan='5'>" + WB.esc(name) + "</td>";
+      tbody.appendChild(tr);
+    }
+    function report(name, gotText, wantText, tolText, ok) {
+      var tr = document.createElement("tr");
+      tr.className = ok ? "pass" : "fail";
+      tr.innerHTML = "<td class='res'>" + (ok ? "PASS" : "FAIL") + "</td><td>" + WB.esc(name) +
+        "</td><td class='num'>" + WB.esc(wantText) + "</td><td class='num'>" + WB.esc(gotText) +
+        "</td><td class='num'>" + WB.esc(tolText) + "</td>";
+      tbody.appendChild(tr);
+      if (ok) pass++; else fail++;
+    }
+    function approx(name, got, want, tol) {
+      tol = tol === undefined ? 0.01 : tol;
+      var ok = typeof got === "number" && isFinite(got) && Math.abs(got - want) <= tol;
+      report(name, String(got), String(want), "±" + tol, ok);
+    }
+    function truthy(name, cond, detail) {
+      report(name, detail || String(cond), "true", "—", !!cond);
+    }
+    function throws(name, fn) {
+      var threw = false, msg = "";
+      try { fn(); } catch (e) { threw = true; msg = e.message; }
+      report(name, threw ? "threw: " + msg.slice(0, 60) : "did not throw", "graceful error", "—", threw);
+    }
+    function solve(id, target, vals) {
+      return WB.solve(WB.getEquation(id), target, vals).value;
+    }
+
+    /* ── Time value of money — textbook anchors ── */
+    group("Time value of money");
+    approx("Compound FV: R10,000 @ 10% monthly, 5 yrs = R16,453.09", solve("compound_fv", "A", { P: 10000, i: 10, m: 12, n: 5 }), 16453.09, 0.01);
+    approx("Compound PV (inverse of above)", solve("compound_fv", "P", { A: 16453.089347, i: 10, m: 12, n: 5 }), 10000, 0.01);
+    approx("Compound: solve nominal rate i", solve("compound_fv", "i", { A: 16453.089347, P: 10000, m: 12, n: 5 }), 10, 0.0001);
+    approx("Compound: solve years n", solve("compound_fv", "n", { A: 16453.089347, P: 10000, i: 10, m: 12 }), 5, 0.0001);
+    approx("Compound: solve m NUMERICALLY (no closed form)", solve("compound_fv", "m", { A: 16453.089347, P: 10000, i: 10, n: 5 }), 12, 0.01);
+    approx("PV single sum: R20,000 @ 9% monthly, 4 yrs", solve("compound_pv", "P", { A: 20000, i: 9, m: 12, n: 4 }), 20000 * Math.pow(1 + 0.09 / 12, -48), 0.01);
+    approx("Simple interest: R5,000 @ 6%, 3 yrs = R5,900", solve("simple_interest", "A", { P: 5000, i: 6, n: 3 }), 5900, 0.001);
+    approx("Simple interest: solve rate", solve("simple_interest", "i", { A: 5900, P: 5000, n: 3 }), 6, 0.0001);
+    approx("Continuous: R1,000 @ 8%, 5 yrs = R1,491.82", solve("continuous_compound", "A", { P: 1000, i: 8, n: 5 }), 1491.82, 0.01);
+    approx("Effective rate: 12% monthly = 12.6825%", solve("effective_rate", "j", { i: 12, m: 12 }), 12.6825, 0.0001);
+    approx("Effective → nominal (round trip)", solve("effective_rate", "i", { j: 12.682503013196977, m: 12 }), 12, 0.0001);
+    approx("FV ordinary annuity: R1,000/yr, 8%, 10 yrs = R14,486.56", solve("fv_ordinary_annuity", "F", { R: 1000, i: 8, n: 10 }), 14486.56, 0.01);
+    approx("PV ordinary annuity: R1,000/yr, 8%, 10 yrs = R6,710.08", solve("pv_ordinary_annuity", "P", { R: 1000, i: 8, n: 10 }), 6710.08, 0.01);
+    approx("PV annuity: solve i NUMERICALLY", solve("pv_ordinary_annuity", "i", { P: 6710.0814, R: 1000, n: 10 }), 8, 0.001);
+    approx("PV annuity: solve n", solve("pv_ordinary_annuity", "n", { P: 6710.0814, R: 1000, i: 8 }), 10, 0.001);
+    approx("FV annuity due = ordinary × 1.08", solve("fv_annuity_due", "F", { R: 1000, i: 8, n: 10 }), 15645.49, 0.01);
+    approx("PV annuity due = ordinary × 1.08", solve("pv_annuity_due", "P", { R: 1000, i: 8, n: 10 }), 7246.89, 0.01);
+    approx("Deferred annuity: 10×R1,000 @8%, deferred 3", solve("deferred_annuity_pv", "P", { R: 1000, i: 8, n: 10, d: 3 }), 6710.0814 / Math.pow(1.08, 3), 0.01);
+    approx("Perpetuity: R500 @ 5% = R10,000", solve("perpetuity_pv", "P", { R: 500, i: 5 }), 10000, 0.001);
+    approx("Gordon growth: D=2, i=10%, g=4% = 33.33", solve("growing_perpetuity", "P", { D: 2, i: 10, g: 4 }), 33.3333, 0.001);
+    approx("Sinking fund: R100,000 @ 6%, 10 yrs = R7,586.80", solve("sinking_fund", "R", { F: 100000, i: 6, n: 10 }), 7586.80, 0.01);
+    approx("Loan payment: R100,000 @ 1%/mo, 240 mo = R1,101.09", solve("loan_payment", "R", { P: 100000, i: 1, n: 240 }), 1101.09, 0.01);
+    approx("Loan: solve n back", solve("loan_payment", "n", { P: 100000, i: 1, R: 1101.086125 }), 240, 0.01);
+    approx("Loan: solve i NUMERICALLY", solve("loan_payment", "i", { P: 100000, R: 1101.086125, n: 240 }), 1, 0.0001);
+    var balExp = 100000 * Math.pow(1.01, 12) - 1101.086125 * ((Math.pow(1.01, 12) - 1) / 0.01);
+    approx("Outstanding balance after 12 payments", solve("outstanding_balance", "B", { P: 100000, R: 1101.086125, i: 1, k: 12 }), balExp, 0.01);
+    approx("Equivalent payment moved 2 yrs later @ 8%", solve("equivalent_payment", "X", { S: 10000, i: 8, t: 2 }), 11664, 0.001);
+    approx("Equivalent payment moved 2 yrs earlier @ 8%", solve("equivalent_payment", "X", { S: 10000, i: 8, t: -2 }), 10000 / 1.1664, 0.01);
+
+    /* ── Investment appraisal ── */
+    group("Investment appraisal");
+    approx("NPV of [−1000, 400, 400, 400] @ 10% = −R5.26", WB.getEquation("npv").compute({ cashflows: [-1000, 400, 400, 400], rate: 10 }).outputs[0].value, -5.26, 0.01);
+    approx("IRR of [−1000, 400, 400, 400] ≈ 9.70%", WB.getEquation("irr").compute({ cashflows: [-1000, 400, 400, 400] }).outputs[0].value, 9.7010, 0.005);
+    truthy("NPV at the computed IRR is ~0", Math.abs(WB.npvOf(0.097010, [-1000, 400, 400, 400])) < 0.05, String(WB.npvOf(0.097010, [-1000, 400, 400, 400])));
+    approx("Payback of [−10,000; 3,000; 4,000; 4,000; 3,000] = 2.75 yrs", WB.getEquation("payback_period").compute({ cashflows: [-10000, 3000, 4000, 4000, 3000] }).outputs[0].value, 2.75, 0.001);
+    approx("Discounted payback of [−10,000; 4×4,000] @ 10% = 3.02 yrs", WB.getEquation("discounted_payback").compute({ cashflows: [-10000, 4000, 4000, 4000, 4000], rate: 10 }).outputs[0].value, 3.0192, 0.001);
+    approx("Profitability index of [−1000, 400×3] @ 8%", WB.getEquation("profitability_index").compute({ cashflows: [-1000, 400, 400, 400], rate: 8 }).outputs[0].value, 1.03083, 0.0005);
+
+    /* ── Depreciation ── */
+    group("Depreciation");
+    approx("Straight line: (50,000−5,000)/9 = 5,000", solve("straight_line_dep", "D", { C: 50000, S: 5000, n: 9 }), 5000, 0.001);
+    approx("Reducing balance: 10,000 @ 20%, 3 yrs = 5,120", solve("reducing_balance_dep", "V", { C: 10000, r: 20, n: 3 }), 5120, 0.001);
+    approx("Reducing balance: solve rate back", solve("reducing_balance_dep", "r", { V: 5120, C: 10000, n: 3 }), 20, 0.001);
+    approx("Units of production: (120k−20k)×15k/100k = 15,000", solve("units_production_dep", "D", { C: 120000, S: 20000, u: 15000, U: 100000 }), 15000, 0.001);
+
+    /* ── Economics ── */
+    group("Economics");
+    approx("Midpoint elasticity: P 10→12, Q 100→80 = −1.222", solve("elasticity_midpoint", "E", { Q1: 100, Q2: 80, P1: 10, P2: 12 }), -1.2222, 0.001);
+    approx("Point elasticity: (−20/100)/(2/10) = −1", solve("elasticity_point", "E", { dQ: -20, Q: 100, dP: 2, P: 10 }), -1, 0.001);
+    approx("Cross elasticity (substitutes, positive)", solve("cross_elasticity", "E", { Qx1: 200, Qx2: 250, Py1: 20, Py2: 25 }), (50 / 225) / (5 / 22.5), 0.001);
+    approx("Break-even qty: 100,000/(50−30) = 5,000", solve("breakeven_qty", "Q", { F: 100000, p: 50, v: 30 }), 5000, 0.001);
+    approx("Break-even revenue: 100,000/(1−30/50) = 250,000", solve("breakeven_revenue", "T", { F: 100000, p: 50, v: 30 }), 250000, 0.01);
+    approx("CVP target profit: (100k+50k)/20 = 7,500", solve("cvp_target_profit", "Q", { F: 100000, T: 50000, p: 50, v: 30 }), 7500, 0.001);
+    approx("Equilibrium: 100−2P = 20+2P → P* = 20", solve("market_equilibrium", "P", { a: 100, b: 2, c: 20, d: 2 }), 20, 0.0001);
+    approx("Fisher: 12% nominal, 5% inflation → 6.667% real", solve("fisher_equation", "R", { N: 12, f: 5 }), 6.66667, 0.001);
+    approx("Inflation-adjusted: 100,000 @ 6%, 10 yrs", solve("inflation_adjusted", "V", { M: 100000, f: 6, n: 10 }), 55839.48, 0.01);
+    approx("GDP deflator: 2400/2000×100 = 120", solve("gdp_deflator", "D", { N: 2400, R: 2000 }), 120, 0.0001);
+
+    /* ── Statistics & probability ── */
+    group("Statistics & probability");
+    var ds = WB.getEquation("data_stats").compute({ data: [12, 15, 11, 18, 14, 16, 13] });
+    approx("Mean of [12,15,11,18,14,16,13] = 14.142857", ds.outputs[1].value, 14.142857, 0.0001);
+    approx("Sample SD of same list = 2.4103", ds.outputs[5].value, 2.41030, 0.0005);
+    approx("z-score: (85−70)/10 = 1.5", solve("z_score", "z", { x: 85, u: 70, s: 10 }), 1.5, 0.0001);
+    approx("Binomial: n=10, k=3, p=0.5 = 0.1171875", solve("binomial_pmf", "P", { n: 10, k: 3, p: 50 }), 0.1171875, 0.00001);
+    approx("Poisson P(X=2), λ=3 = 0.22404", solve("poisson_pmf", "P", { L: 3, k: 2 }), 0.224042, 0.00005);
+    approx("Poisson P(X≤2), λ=3 = 0.42319", solve("poisson_cdf", "P", { L: 3, k: 2 }), 0.423190, 0.00005);
+    var ev = WB.getEquation("expected_value_table").compute({ pairs: [[100, 0.2], [50, 0.5], [-30, 0.3]] });
+    approx("Expected value table: E = 36", ev.outputs[0].value, 36, 0.001);
+
+    /* ── Trader's annex ── */
+    group("Trader's annex");
+    approx("Kelly: b=2, p=55% → f* = 32.5%", solve("kelly_criterion", "f", { b: 2, p: 55 }), 32.5, 0.001);
+    approx("Risk of ruin: A=10%, U=20", solve("risk_of_ruin", "R", { A: 10, U: 20 }), Math.pow(0.9 / 1.1, 20) * 100, 0.0001);
+    approx("EV/trade: 40% × 2.5R − 60% × 1R = 0.4R", solve("ev_per_trade", "E", { p: 40, W: 2.5, L: 1 }), 0.4, 0.0001);
+    approx("Position size: 100k × 1% / 2.50 = 400 units", solve("position_size", "N", { C: 100000, r: 1, s: 2.5 }), 400, 0.001);
+    approx("CAGR: 1,000 → 2,000 in 5 yrs = 14.87%", solve("cagr", "g", { B: 1000, E: 2000, n: 5 }), 14.8698, 0.001);
+    approx("Drawdown recovery: −50% needs +100%", solve("drawdown_recovery", "g", { d: 50 }), 100, 0.001);
+    approx("Rule of 72 @ 9% = 8 yrs", solve("rule_of_72", "n", { i: 9 }), 8, 0.001);
+
+    /* ── Engine behaviour & formatting ── */
+    group("Engine behaviour");
+    throws("Missing input throws a friendly error", function () {
+      solve("compound_fv", "A", { P: 10000, i: 10, m: 12 });
+    });
+    throws("Impossible bracket reports 'no solution', not NaN", function () {
+      solve("pv_ordinary_annuity", "n", { P: 50000, R: 100, i: 8 }); // payments can never reach that PV
+    });
+    var irrBad = WB.getEquation("irr").compute({ cashflows: [1000, 400, 400] });
+    truthy("IRR with no sign change returns an error message", !!irrBad.error, irrBad.error || "no error");
+    truthy("Rounding kills 0.1+0.2 artifact", WB.fmtNum(0.1 + 0.2, 2).indexOf("0000") < 0, WB.fmtNum(0.1 + 0.2, 2));
+    truthy("round(2.675, 2) = 2.68 (classic float trap)", WB.round(2.675, 2) === 2.68, String(WB.round(2.675, 2)));
+    truthy("Parse '1 234,56' → 1234.56", WB.parseNum("1 234,56") === 1234.56, String(WB.parseNum("1 234,56")));
+    truthy("Parse 'R 500' → 500", WB.parseNum("R 500") === 500, String(WB.parseNum("R 500")));
+    truthy("Roman 16453 uses vinculum", (WB.toRoman(16453) || "").indexOf("vinculum") >= 0, WB.toRoman(16453));
+    truthy("Roman 3999 = MMMCMXCIX", WB.toRoman(3999) === "MMMCMXCIX", WB.toRoman(3999));
+    truthy("Registry holds 45+ equations", WB.EQUATIONS.length >= 45, WB.EQUATIONS.length + " equations");
+    truthy("Custom relation compiler works", (function () {
+      var rel = WB.compileRelation("S - C*(1+m)", ["S", "C", "m"]);
+      return rel({ S: 125, C: 100, m: 0.25 }) === 0;
+    })(), "S − C(1+m) at S=125, C=100, m=0.25 → 0");
+    throws("Relation compiler rejects code injection", function () {
+      WB.compileRelation("window.alert(1)", ["x", "y"]);
+    });
+
+    /* ── Generators: every generated problem must be solvable & finite ── */
+    group("Problem generators");
+    var genBad = 0, genCount = 0, gens = 0;
+    WB.EQUATIONS.forEach(function (eq) {
+      if (!eq.problemGenerator) return;
+      gens++;
+      for (var d = 1; d <= 3; d++) {
+        for (var s = 0; s < 25; s++) {
+          genCount++;
+          var q = eq.problemGenerator(WB.makeRng(d * 7919 + s), d);
+          if (!q || !q.prompt || !isFinite(q.answer) || !(q.tolerance > 0)) genBad++;
+        }
+      }
+    });
+    truthy(gens + " generators × 3 difficulties × 25 draws all finite (" + genCount + " problems)", genBad === 0, genBad + " bad");
+
+    /* ── Steps: every steps() call renders for every closed-form variable ── */
+    group("Worked steps");
+    var stepBad = 0, stepCount = 0;
+    WB.EQUATIONS.forEach(function (eq) {
+      if (eq.type === "list" || !eq.steps) return;
+      var vals = {};
+      eq.variables.forEach(function (m) { if (m.default !== undefined) vals[m.symbol] = m.default; });
+      eq.variables.forEach(function (m) {
+        var others = eq.variables.filter(function (x) { return x.symbol !== m.symbol; });
+        if (!others.every(function (x) { return vals[x.symbol] !== undefined; })) return;
+        try {
+          var res = WB.solve(eq, m.symbol, vals);
+          var st = WB.getSteps(eq, m.symbol, res);
+          stepCount++;
+          if (!st.length) stepBad++;
+          st.forEach(function (step) { katex.renderToString(step.latex, { throwOnError: true }); });
+        } catch (e) { stepBad++; }
+      });
+    });
+    truthy(stepCount + " step walkthroughs solve and render in KaTeX", stepBad === 0, stepBad + " failed");
+
+    /* ── summary ── */
+    var sum = document.getElementById("summary");
+    sum.textContent = pass + " passed · " + fail + " failed · " + (pass + fail) + " total";
+    sum.className = "summary " + (fail ? "hasfail" : "allpass");
+    document.title = (fail ? "✗ " : "✓ ") + document.title;
+    window.__WB_TESTS__ = { pass: pass, fail: fail };
+  })();
+  </script>
+</body>
+</html>
