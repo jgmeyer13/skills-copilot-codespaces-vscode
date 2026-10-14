@@ -110,7 +110,13 @@ reflow as digits change.
   state hashes at ten checkpoints.
 - The `DataSource` boundary. Not a mock: `server/index.ts` imports `src/sim`
   unchanged, and `tests/unit/server.test.ts` spawns the real server and speaks
-  the real protocol over a real socket.
+  the real protocol over a real socket. Verified in a browser as well
+  (`scripts/check-remote.mjs`): a `VITE_DATA_SOURCE=remote` build, a server
+  started with `SEED=4242`, and the running app reporting seed 4242 — the
+  client's own default is 20261014, so the number is proof the world is coming
+  down the socket rather than being simulated locally. A speed change clicked in
+  the browser round-tripped through the server and came back. No code differs
+  between the two modes.
 - Pathfinding. A* with a binary heap, corner-cutting prevention, string-pulled
   waypoints and a route cache, measured at under 3 ms for 400 queries.
 - The thermal model. Heat leak through open doors scaled by trailer seal, wind

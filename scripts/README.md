@@ -30,6 +30,7 @@ drives it with the bundled Chromium under SwiftShader.
 | Script | What it does |
 |---|---|
 | `drive.mjs` | Launches the app and drives it as a person would: search, switch camera view, open an entity, force an incident, click the alert, start the demo tour. The command-palette race was found here and by nothing else. |
+| `check-remote.mjs` | Proves the env-var switch: a `remote` build in a browser, talking to the Node server over a real WebSocket. Checks the connection pip, that the seed reported is the *server's* rather than the client default, that ticks advance, and that a command round-trips. |
 | `check-artifact.mjs` | Boots the single-file bundle inside a replica of the platform's publish wrapper, at desktop and phone widths. Checks the title, that it boots, that there is no horizontal scroll and that the body paints its own background. |
 | `shoot.mjs` | Screenshots at laptop and tablet sizes, reporting console errors and a frame-rate sample. |
 | `views.mjs` | Captures the three camera presets. |
