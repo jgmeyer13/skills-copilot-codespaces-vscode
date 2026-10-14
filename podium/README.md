@@ -53,9 +53,20 @@ Then open <http://127.0.0.1:4300/>.
 
 ## Verification
 
-`node probe.mjs` reads the engine through `window.__podium`; `node drive.mjs`
-drives every control and reports console errors; `node shoot.mjs` captures
-desktop and phone; `node boxes.mjs` dumps element geometry at phone width.
+Serve the directory first (`python3 -m http.server 4300` from `podium/`), then:
+
+| Script | What it does |
+|---|---|
+| `run.mjs` | The acceptance run. Goes at the parts a dashboard test does not: clicking a pod **in the 3D world**, dragging to orbit, scrolling to zoom, the keyboard, the tour, and the phone's three buttons. It found that the whole canvas was dead to the pointer. |
+| `drive.mjs` | Drives the dashboard controls and reports console errors. |
+| `probe.mjs` | Reads the engine through `window.__podium` — tick, clock, pod states, metrics. |
+| `presets.mjs` | Opens a pod and captures all four lighting rigs for comparison. |
+| `inside.mjs` | Opens whichever pod is mid-capture and photographs the interior. |
+| `shoot.mjs` | Desktop and phone captures. |
+| `boxes.mjs` | Dumps element geometry at phone width, for layout bugs. |
+
+Frame rate in this container is 1–2 fps under software rendering, so anything
+timed is asserted against the engine's own counters rather than the clock.
 
 Every name, gym, member and number in here is invented.
 

@@ -1823,7 +1823,12 @@ let uiAcc = 0
 
 function loop(now) {
   frames += 1
-  const dt = Math.min(0.1, (now - last) / 1000)
+  // The clamp keeps the *simulation* from jumping a minute forward when a
+  // backgrounded tab comes back. The tour has no such problem and should run
+  // on the clock, so it gets the real delta: on a slow machine the clamped one
+  // made a six-second step take over a minute.
+  const rawDt = (now - last) / 1000
+  const dt = Math.min(0.1, rawDt)
   last = now
 
   if (!sim.paused) {
@@ -1833,7 +1838,7 @@ function loop(now) {
   }
 
   if (tour) {
-    tour.left -= dt
+    tour.left -= Math.min(1, rawDt)
     if (tour.left <= 0) {
       tour.step = (tour.step + 1) % TOUR.length
       TOUR[tour.step].run()
@@ -1863,6 +1868,7 @@ window.__podium = {
   get speed() { return sim.speed },
   get paused() { return sim.paused },
   get site() { return site().id },
+  get tourStep() { return tour ? tour.step : -1 },
   get pods() { return site().pods.map((p) => ({ id: p.id, state: p.state, left: Math.round(p.left), preset: p.preset.id })) },
   get metrics() { return metrics(site()) },
   // For diagnosing the scene from a driver script rather than by eye.

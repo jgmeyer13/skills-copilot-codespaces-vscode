@@ -103,8 +103,21 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible {
   padding-bottom: env(safe-area-inset-bottom, 0px);
   pointer-events: none;
 }
-.ui > *, .ui button, .ui input, .ui select { pointer-events: auto; }
-.card, .rail, .device, .feed { pointer-events: auto; }
+/*
+ * Pointer routing.
+ *
+ * `.ui > *` was handing pointer-events back to `.stage`, which spans the whole
+ * middle of the screen — so the 3D canvas underneath got nothing. Clicking a
+ * pod in the world, dragging to orbit and scrolling to zoom were all dead, and
+ * nothing looked wrong in a screenshot.
+ *
+ * So the layout containers stay transparent to the pointer and only things
+ * that are themselves a surface take events back. The gaps between panels are
+ * the world, and they have to behave like it.
+ */
+.stage, .centre, .dock, .rail, .device, .kpis { pointer-events: none; }
+.topbar, .card, .kpi, .transport, .tabs, .screen, .feed, .sheet-wrap { pointer-events: auto; }
+.ui button, .ui input, .ui select, .ui label { pointer-events: auto; }
 
 /* ── Top bar ───────────────────────────────────────────────────────────── */
 
