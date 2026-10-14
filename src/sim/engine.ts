@@ -201,8 +201,11 @@ export class Engine {
           door.openness = 1
           door.openTicks = 600
         }
-        // And push the zone most of the way out of band so it bites immediately.
+        // Trip the compressor and push the zone out of band. The doors alone
+        // recover in a couple of simulated minutes; a plant fault is what makes
+        // a real excursion, and it is what the demo needs to be able to show.
         coldest.tempC = coldest.setpointC + 9
+        coldest.plantFaultMin = 180
         break
       }
 

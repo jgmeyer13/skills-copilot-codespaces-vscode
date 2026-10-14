@@ -41,6 +41,12 @@ export const FORKLIFT = {
   resumeAbove: 0.85,
 } as const
 
+/**
+ * How deep the unassigned put-away queue may get, per forklift, before the dock
+ * stops unloading. Three is about twenty minutes of work in hand.
+ */
+const MAX_QUEUE_PER_FORKLIFT = 3
+
 /** Priority bands. Higher wins. */
 const PRIORITY = { rescue: 100, pick: 50, putaway: 20, replen: 10 } as const
 
@@ -81,6 +87,16 @@ function unloadOnePallet(site: SiteRuntime, world: WorldState, truck: Truck, bay
   // rather than stacking product on the apron, and creating it anyway strands a
   // pallet with no put-away destination that then cooks off its thermal budget.
   if (site.freeSlots[truck.zone].length === 0) return
+
+  // Back-pressure. A floor that cannot keep up stops the dock, because every
+  // extra pallet on the apron is stock burning its thermal budget for nothing.
+  // This makes the work queue structurally bounded rather than bounded by
+  // whatever the arrival rate happens to be tuned to this week.
+  let waiting = 0
+  for (const task of site.tasks) {
+    if (task.kind === 'putaway' && task.assignedTo === '') waiting++
+  }
+  if (waiting >= site.forklifts.length * MAX_QUEUE_PER_FORKLIFT) return
 
   const candidates = SKUS.filter((s) => s.zone === truck.zone)
   if (candidates.length === 0) return

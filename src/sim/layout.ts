@@ -86,6 +86,7 @@ export function buildSiteLayout(def: SiteDefinition, seed: number): SiteLayout {
     lat: def.lat,
     lon: def.lon,
     timezone: def.timezone,
+    description: def.description,
     building: {
       width,
       depth,
@@ -336,7 +337,7 @@ function buildProps(rng: Rng, width: number, depth: number, def: SiteDefinition)
   }
 
   // Basalt. Keflavík is built on a lava field, so it gets a lot.
-  const boulders = def.id === 'KEF-01' ? 110 : 40
+  const boulders = def.id === 'KEF-01' ? 58 : 24
   for (let i = 0; i < boulders; i++) {
     const x = rng.range(xMin - 24, xMax + 24)
     const z = rng.range(yardZ0 - 18, depth + 24)
@@ -384,9 +385,13 @@ function buildProps(rng: Rng, width: number, depth: number, def: SiteDefinition)
     push('turbine', rng.range(xMin - 150, xMax + 150), rng.range(depth + 70, depth + 170), rng.range(0, 0.6), rng.range(0.85, 1.25))
   }
 
-  // Empty swap bodies parked along the back fence.
-  for (let i = 0; i < 7; i++) {
-    push('container', xMin + 2 + i * 7.2, yardZ0 + 4, 0, 1)
+  // Empty swap bodies parked in the yard rows. Previously these sat against the
+  // back fence where the camera never sees them, leaving the yard looking unused.
+  for (let i = 0; i < 6; i++) {
+    push('container', xMin + 6 + i * 8.4, -39, rng.range(-0.04, 0.04), 1)
+  }
+  for (let i = 0; i < 4; i++) {
+    push('container', width * 0.52 + i * 8.4, -52, rng.range(-0.04, 0.04), 1)
   }
 
   // Standing water on the apron — it rains constantly in Reykjanes.

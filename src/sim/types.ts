@@ -138,6 +138,8 @@ export interface SiteLayout {
   lat: number
   lon: number
   timezone: string
+  /** One-line operational description, shown in the site panel. */
+  description: string
   building: { width: number; depth: number; height: number; eaveHeight: number }
   bays: DockBay[]
   rackRows: RackRow[]
@@ -450,6 +452,12 @@ export interface ZoneState {
   palletCount: number
   /** Minutes the zone has been continuously out of band. */
   outOfBandMin: number
+  /**
+   * Minutes of refrigeration plant fault remaining. While this is above zero the
+   * plant runs at a fraction of its capacity — a tripped compressor — which is
+   * what turns a door left open into a sustained excursion rather than a blip.
+   */
+  plantFaultMin: number
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

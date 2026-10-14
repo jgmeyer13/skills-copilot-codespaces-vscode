@@ -49,7 +49,7 @@ const REVERSE_SETUP_X = 11
  * so a faster dock simply builds an unbounded queue of staged pallets that then
  * cook on the apron. Five minutes a pallet keeps the staging lanes clearing.
  */
-const PALLET_TRANSFER_MIN = 5
+const PALLET_TRANSFER_MIN = 8
 /** Give up and send the truck away if the floor can't service it. */
 const MAX_DWELL_MIN = 160
 
@@ -65,12 +65,13 @@ export function dispatchTrucks(site: SiteRuntime, world: WorldState): void {
   // a second push before the evening air freight, and a quiet small hours.
   const hour = world.clock.minuteOfDay / 60
   const demand =
-    0.35 +
-    0.9 * Math.exp(-Math.pow(hour - 7.5, 2) / 6) +
-    0.75 * Math.exp(-Math.pow(hour - 16, 2) / 8) +
-    0.2 * Math.exp(-Math.pow(hour - 22, 2) / 10)
+    0.85 +
+    0.8 * Math.exp(-Math.pow(hour - 7.5, 2) / 11) +
+    0.7 * Math.exp(-Math.pow(hour - 16, 2) / 13) +
+    0.25 * Math.exp(-Math.pow(hour - 22, 2) / 12) -
+    0.45 * Math.exp(-Math.pow(hour - 3, 2) / 9)
 
-  const gapMin = clampNum(26 / (demand * site.def.intensity), 7, 90)
+  const gapMin = clampNum(19 / (demand * site.def.intensity), 6, 70)
   site.nextArrivalMin = nowMin + site.rng.gaussian(gapMin, gapMin * 0.25)
 
   // Don't flood the yard if the floor is already saturated.
@@ -102,7 +103,7 @@ function spawnTruck(site: SiteRuntime, world: WorldState, nowMin: number): Truck
   truck.speed = TRUCK.maxSpeed
 
   if (direction === 'inbound') {
-    truck.palletsOnBoard = site.rng.int(4, Math.min(truck.palletCapacity, 12))
+    truck.palletsOnBoard = site.rng.int(3, Math.min(truck.palletCapacity, 8))
   } else {
     const shipment = pickOutboundShipment(site, world, zone, nowMin)
     truck.shipmentId = shipment.id

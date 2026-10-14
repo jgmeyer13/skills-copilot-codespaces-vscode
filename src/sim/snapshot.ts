@@ -68,6 +68,7 @@ function buildSite(site: SiteRuntime, isActive: boolean): SiteSnapshot {
       inBand: z.inBand,
       palletCount: z.palletCount,
       outOfBandMin: r2(z.outOfBandMin),
+      plantFaultMin: r2(z.plantFaultMin),
     })),
     apronC: r2(site.apronC),
     doors: site.doors.map(packDoor),

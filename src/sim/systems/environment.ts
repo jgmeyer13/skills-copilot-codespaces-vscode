@@ -52,6 +52,9 @@ const APRON_SETPOINT = 6
 const APRON_PLANT_RATE = 0.09
 const APRON_LEAK_COEF = 0.055
 
+/** Plant capacity retained while a compressor is faulted. */
+const PLANT_FAULT_CAPACITY = 0.15
+
 /** Stock turnover slowly restores zone integrity once the zone is back in band. */
 const INTEGRITY_RECOVERY_PER_MIN = 0.004
 
@@ -190,7 +193,10 @@ export function updateThermal(site: SiteRuntime, _world: WorldState): void {
     // directly — the door opens into the building, not the weather.
     const gradient = site.apronC - zs.tempC
     const leak = LEAK_COEF[zs.zone] * open * windFactor * gradient
-    zs.tempC += (spec.setpointC - zs.tempC) * PLANT_RATE[zs.zone] * dt + leak * dt
+
+    if (zs.plantFaultMin > 0) zs.plantFaultMin = Math.max(0, zs.plantFaultMin - dt)
+    const capacity = zs.plantFaultMin > 0 ? PLANT_FAULT_CAPACITY : 1
+    zs.tempC += (spec.setpointC - zs.tempC) * PLANT_RATE[zs.zone] * capacity * dt + leak * dt
 
     const wasInBand = zs.inBand
     zs.inBand = zs.tempC >= spec.minC && zs.tempC <= spec.maxC

@@ -31,6 +31,27 @@ export default tseslint.config(
     rules: reactHooks.configs.recommended.rules,
   },
 
+  /**
+   * React Three Fiber is an imperative renderer wearing a React costume. Inside
+   * `useFrame` the correct and only performant thing to do is mutate the scene
+   * graph in place — object transforms, instance matrices, shader uniforms —
+   * sixty times a second, writing to refs and never touching React state. The
+   * hooks plugin's purity and immutability rules read that as a defect; here it
+   * is the architecture, and the alternative (state updates per frame) is the
+   * thing this codebase exists to avoid.
+   *
+   * Scoped to src/three only. The same rules stay on for src/ui, where they
+   * caught four real problems.
+   */
+  {
+    files: ['src/three/**/*.{ts,tsx}'],
+    rules: {
+      'react-hooks/immutability': 'off',
+      'react-hooks/purity': 'off',
+      'react-hooks/refs': 'off',
+    },
+  },
+
   // The simulation must stay deterministic: no wall-clock, no ambient randomness.
   {
     files: ['src/sim/**/*.ts'],

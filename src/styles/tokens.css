@@ -1,0 +1,126 @@
+/*
+ * KELVIN° — design tokens
+ *
+ * Layout concept: a near-black glass instrument panel floating over a luminous,
+ * colour-shifting 3D world. The world is the only bright thing on screen and it
+ * changes across the day; the chrome never competes with it.
+ *
+ * This design commits to a single dark world on purpose — it is an operations
+ * surface read in a cold store and on a night shift, and a light variant would
+ * be a different product. So there is no light theme: every colour is still
+ * declared explicitly, and `color-scheme: dark` makes native controls follow.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ── Surfaces ─────────────────────────────────────────────────────────── */
+  --ink: #06090d; /* behind everything */
+  --surface: #0c1219; /* panel fill */
+  --raised: #121a24; /* cards, table rows */
+  --raised-2: #18222e; /* hover, active row */
+  --hairline: #1d2733; /* the structural grid of the whole UI */
+  --hairline-soft: #141c26;
+
+  /* Glass panels sit over the 3D scene, so they need alpha, not a flat fill. */
+  --glass: rgba(10, 16, 23, 0.82);
+  --glass-strong: rgba(8, 13, 19, 0.94);
+  --glass-edge: rgba(150, 190, 220, 0.09);
+
+  /* ── Text ─────────────────────────────────────────────────────────────── */
+  --text: #e9f0f7;
+  --text-2: #93a4b7;
+  --text-3: #5e7084;
+  --text-inverse: #06090d;
+
+  /* ── Brand ────────────────────────────────────────────────────────────── */
+  --accent: #3fe3d0; /* Kelvin cyan */
+  --accent-dim: #1f8d82;
+  --accent-glow: rgba(63, 227, 208, 0.18);
+  --accent-line: rgba(63, 227, 208, 0.42);
+
+  /* ── Thermal zones — used identically by the dashboard and the 3D scene ─ */
+  --zone-ambient: #e3b04b;
+  --zone-chill: #45d9e8;
+  --zone-frozen: #6aa8ff;
+  --zone-ultra: #a98cff;
+
+  /* ── State ────────────────────────────────────────────────────────────── */
+  --ok: #3dd68c;
+  --warn: #f5a524;
+  --critical: #ff5c68;
+  --idle: #5e7084;
+  --ok-bg: rgba(61, 214, 140, 0.12);
+  --warn-bg: rgba(245, 165, 36, 0.13);
+  --critical-bg: rgba(255, 92, 104, 0.14);
+
+  /* ── Aurora — night sky and demo-mode chrome ──────────────────────────── */
+  --aurora-1: #3df5a0;
+  --aurora-2: #6aa8ff;
+  --aurora-3: #a98cff;
+
+  /* ── Type ─────────────────────────────────────────────────────────────── */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Inter, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* Every number that moves is set in mono with tabular figures, so live values
+     don't reflow as digits change. This is most of why the UI reads as an
+     instrument rather than a web page. */
+  --font-mono:
+    ui-monospace, 'SF Mono', SFMono-Regular, 'JetBrains Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --fs-micro: 0.625rem; /* 10px — uppercase labels */
+  --fs-small: 0.6875rem; /* 11px */
+  --fs-body: 0.75rem; /* 12px */
+  --fs-base: 0.8125rem; /* 13px */
+  --fs-lg: 0.9375rem; /* 15px */
+  --fs-xl: 1.25rem; /* 20px */
+  --fs-stat: 1.75rem; /* 28px — KPI figures */
+
+  --track-label: 0.085em; /* generous on small uppercase */
+  --track-tight: -0.012em; /* tight on display sizes */
+
+  /* ── Space ────────────────────────────────────────────────────────────── */
+  --s1: 4px;
+  --s2: 6px;
+  --s3: 8px;
+  --s4: 12px;
+  --s5: 16px;
+  --s6: 20px;
+  --s7: 28px;
+
+  /* ── Shape ────────────────────────────────────────────────────────────── */
+  --r-sm: 3px;
+  --r-md: 5px;
+  --r-lg: 8px;
+  --r-pill: 999px;
+
+  /* ── Depth ────────────────────────────────────────────────────────────── */
+  --shadow-panel: 0 12px 36px rgba(0, 0, 0, 0.52), 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  --shadow-pop: 0 18px 48px rgba(0, 0, 0, 0.62);
+
+  /* ── Motion — one curve, three durations ──────────────────────────────── */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --t-fast: 120ms;
+  --t-base: 220ms;
+  --t-slow: 420ms;
+
+  /* ── Layout ───────────────────────────────────────────────────────────── */
+  --topbar-h: 52px;
+  --rail-w: 318px;
+  --left-w: 232px;
+}
+
+/* Honour the OS setting, and the in-app toggle, by collapsing all durations. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-fast: 1ms;
+    --t-base: 1ms;
+    --t-slow: 1ms;
+  }
+}
+
+:root[data-reduced-motion='true'] {
+  --t-fast: 1ms;
+  --t-base: 1ms;
+  --t-slow: 1ms;
+}

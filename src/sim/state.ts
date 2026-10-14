@@ -164,8 +164,10 @@ export interface WorldState {
 export function createWorld(seed: number): WorldState {
   const clock: SimClock = {
     day: 0,
-    // Start at 06:10 — first light in the yard, shift change, trucks already queuing.
-    minuteOfDay: 370,
+    // Open at 09:50. Sunrise at these latitudes in late October is around 07:50,
+    // so the warm-up lands the first frame in clear mid-morning light with the
+    // yard already working — the day/night cycle is still a few minutes away.
+    minuteOfDay: 590,
     daylight: 0,
     sunAzimuth: 0,
     sunElevation: 0,
@@ -246,6 +248,7 @@ function createSite(def: SiteDefinition, seed: number): SiteRuntime {
       inBand: true,
       palletCount: 0,
       outOfBandMin: 0,
+      plantFaultMin: 0,
     }
   })
 
@@ -260,8 +263,8 @@ function createSite(def: SiteDefinition, seed: number): SiteRuntime {
   seedShipments(site)
 
   // Stagger the first arrival so the three sites don't pulse in lockstep.
-  site.nextArrivalMin = 370 + rng.range(2, 18)
-  site.nextWeatherMin = 370 + rng.range(40, 180)
+  site.nextArrivalMin = 590 + rng.range(2, 18)
+  site.nextWeatherMin = 590 + rng.range(40, 180)
 
   return site
 }
@@ -359,12 +362,12 @@ function seedShipments(site: SiteRuntime): void {
   // A few shipments already in flight so the tracker isn't empty on first paint.
   const count = 3 + Math.floor(site.def.intensity * 2)
   for (let i = 0; i < count; i++) {
-    const shipment = createShipment(site, 370 + site.rng.range(-120, 260))
+    const shipment = createShipment(site, 590 + site.rng.range(-120, 260))
     // Advance the older ones so the tracker shows a spread of stages.
     const stage = site.rng.int(0, 3)
     for (let s = 0; s < stage; s++) {
       shipment.stage = (['confirmed', 'picked', 'loading', 'inTransit'] as const)[s + 1] ?? 'confirmed'
-      shipment.stageAtMin[s + 1] = 370 - (stage - s) * 18
+      shipment.stageAtMin[s + 1] = 590 - (stage - s) * 18
     }
     if (shipment.stage === 'picked' || shipment.stage === 'loading') {
       shipment.palletsReady = Math.min(shipment.palletsTotal, site.rng.int(1, shipment.palletsTotal))
