@@ -21,11 +21,43 @@ import { RoomEnvironment } from './RoomEnvironment.js'
 // Catalogue — every name here is invented
 // ═══════════════════════════════════════════════════════════════════════════
 
+/*
+ * The four looks.
+ *
+ * A preset moves the lights, it does not tint them. That is the difference
+ * between a lighting rig and a filter, and it is the whole reason the pod is a
+ * box rather than an app: Noir is one hard source directly overhead, Halo is
+ * two broad sources either side at chest height, and no amount of post
+ *                                                      processing turns one into the other.
+ *
+ * Positions are in pod-local metres — x across, y up from the floor, z toward
+ * the door.
+ */
 const PRESETS = [
-  { id: 'stage', name: 'Stage',    hex: 0xffb867, css: '#ffb867', key: 1.00, fill: 0.34, rim: 0.70, note: 'Warm key, hard rim. The default, and the most forgiving.' },
-  { id: 'noir',  name: 'Noir',     hex: 0xcfd8e6, css: '#cfd8e6', key: 0.92, fill: 0.08, rim: 0.46, note: 'One hard top light. Deep shadow, maximum separation.' },
-  { id: 'red',   name: 'Red room', hex: 0xff3b5c, css: '#ff3b5c', key: 0.86, fill: 0.22, rim: 0.40, note: 'Full red wash. Flattering on definition, useless for skin tone.' },
-  { id: 'halo',  name: 'Halo',     hex: 0xeaf4ff, css: '#eaf4ff', key: 1.00, fill: 0.78, rim: 0.30, note: 'Even white from both sides. The honest one — nothing is hidden.' },
+  {
+    id: 'stage', name: 'Stage', hex: 0xffb867, css: '#ffb867',
+    key: 1.05, fill: 0.3, rim: 0.8,
+    keyPos: [-0.88, 2.15, 0.75], fillPos: [0.9, 1.2, 0.6], rimPos: [0, 2.35, -1.0],
+    note: 'Warm key from one side, hard rim from behind. The default, and the most forgiving.',
+  },
+  {
+    id: 'noir', name: 'Noir', hex: 0xd6dfeb,
+    css: '#cfd8e6', key: 1.5, fill: 0.04, rim: 0.5,
+    keyPos: [0, 2.45, 0.42], fillPos: [1.05, 0.85, 0.9], rimPos: [0, 2.25, -1.15],
+    note: 'One hard source straight overhead. Deep shadow under everything — maximum separation, least mercy.',
+  },
+  {
+    id: 'red', name: 'Red room', hex: 0xff3b5c, css: '#ff3b5c',
+    key: 1.0, fill: 0.62, rim: 0.5,
+    keyPos: [-0.98, 1.72, 0.5], fillPos: [0.98, 1.72, 0.5], rimPos: [0, 2.2, -1.1],
+    note: 'Full red wash from both sides. Flattering on definition, useless for skin tone.',
+  },
+  {
+    id: 'halo', name: 'Halo', hex: 0xeaf4ff, css: '#eaf4ff',
+    key: 1.0, fill: 0.88, rim: 0.34,
+    keyPos: [-1.08, 1.78, 0.3], fillPos: [1.08, 1.78, 0.3], rimPos: [0, 2.4, -0.9],
+    note: 'Even white from both sides at chest height. The honest one — nothing is hidden.',
+  },
 ]
 
 const POSES = {
@@ -119,13 +151,30 @@ const sim = {
   tab: 'pod',
 }
 
+/*
+ * A member is mostly their history.
+ *
+ * The weight is measured, not typed — the floor is the scale — and the series
+ * behind it is what the product actually sells. One photo is a photo; eight of
+ * them under the same light, from the same marks, each with a number attached,
+ * is a measurement you can act on.
+ */
 function makeMember() {
+  const now = Math.round(between(54, 103) * 10) / 10
+  const drift = between(-0.26, 0.16)
+  const history = []
+  for (let i = 7; i >= 0; i--) {
+    // A plausible walk backwards from today, with the noise a real scale has.
+    history.push(Math.round((now + drift * i * 2 + between(-0.5, 0.5)) * 10) / 10)
+  }
+  history[history.length - 1] = now
   return {
     name: `${pick(FIRST)} ${pick(LAST)}.`,
-    // Weight in kg with one decimal: the floor is a scale, so this is measured,
-    // not entered — which is most of why the record is worth anything.
-    weight: Math.round(between(54, 103) * 10) / 10,
-    delta: Math.round(between(-1.4, 1.1) * 10) / 10,
+    weight: now,
+    delta: Math.round((now - history[history.length - 2]) * 10) / 10,
+    since: Math.round((now - history[0]) * 10) / 10,
+    spanWeeks: Math.floor(between(5, 14)),
+    history,
     streak: Math.floor(between(1, 26)),
     visits: Math.floor(between(2, 48)),
   }
@@ -403,7 +452,7 @@ scene.fog = new THREE.Fog(0x05070a, 30, 84)
 const pmrem = new THREE.PMREMGenerator(renderer)
 const envRT = pmrem.fromScene(new RoomEnvironment(), 0.04)
 scene.environment = envRT.texture
-scene.environmentIntensity = 0.12
+scene.environmentIntensity = 0.07
 
 const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 300)
 
@@ -462,6 +511,26 @@ const GLOW_TEX = gradientTexture((ctx, w, h) => {
   ctx.fillRect(0, 0, w, h)
 })
 
+/*
+ * Keeping the room out of the pod.
+ *
+ * Nothing casts a shadow here — shadow maps over thin panels at this scale
+ * cost more than they buy — so the room's lights shine straight through the
+ * pod walls and fill the shadow side of every preset. Noir and Halo came out
+ * as the same overexposed box, which is the opposite of the product.
+ *
+ * Layers looked like the answer and are not: three.js's forward renderer
+ * builds one light list per scene, so `light.layers` does not stop a light
+ * reaching an object on another layer. Verified by killing the room lights
+ * from a driver script and watching the interior finally go dark.
+ *
+ * So the room dims instead. Opening a pod is an operator asking to look
+ * inside, and a photographer kills the overheads for exactly the same reason.
+ * With the doors shut it makes no difference, because there is nothing to see.
+ */
+const ROOM_LIGHTS = []
+let roomDim = 1
+
 const POD_W = 2.5
 const POD_H = 2.6
 const POD_D = 3.0
@@ -474,35 +543,178 @@ scene.add(bank)
 function buildPod(index, count) {
   const g = new THREE.Group()
 
-  // Shell
-  const shell = new THREE.Mesh(new THREE.BoxGeometry(POD_W, POD_H, POD_D), MAT.shell)
-  shell.position.y = POD_H / 2
-  g.add(shell)
+  /*
+   * The shell is five panels and a doorway rather than one box, because the
+   * product is what happens inside it. Selecting a pod swings the door open on
+   * its hinge and lights the interior with whichever preset is running — which
+   * is the only way to show that the four looks are a lighting rig and not a
+   * filter applied afterwards.
+   */
+  const T = 0.09 // panel thickness
+  const DOOR_W = POD_W * 0.74
+  const DOOR_H = POD_H * 0.86
 
-  // Door face, inset a touch so the seam reads
-  const door = new THREE.Mesh(new THREE.BoxGeometry(POD_W * 0.72, POD_H * 0.84, 0.06), MAT.door)
-  door.position.set(0, POD_H * 0.44, POD_D / 2 + 0.01)
-  g.add(door)
+  const panel = (w, h, d, x, y, z, mat = MAT.shell) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat)
+    m.position.set(x, y, z)
+    g.add(m)
+    return m
+  }
+
+  panel(POD_W, POD_H, T, 0, POD_H / 2, -POD_D / 2)                       // back
+  panel(T, POD_H, POD_D, -POD_W / 2, POD_H / 2, 0)                       // left
+  panel(T, POD_H, POD_D, POD_W / 2, POD_H / 2, 0)                        // right
+  panel(POD_W, T, POD_D, 0, POD_H, 0)                                    // roof
+  panel(POD_W, T, POD_D, 0, T / 2, 0, MAT.rubber)                        // floor
+
+  // The front face, as a frame around the opening.
+  const sideW = (POD_W - DOOR_W) / 2
+  panel(POD_W, POD_H - DOOR_H, T, 0, POD_H - (POD_H - DOOR_H) / 2, POD_D / 2)
+  panel(sideW, DOOR_H, T, -(DOOR_W + sideW) / 2, DOOR_H / 2, POD_D / 2)
+  panel(sideW, DOOR_H, T, (DOOR_W + sideW) / 2, DOOR_H / 2, POD_D / 2)
+
+  // ── interior ──────────────────────────────────────────────────────────
+  const interior = new THREE.Group()
+  g.add(interior)
+
+  // Acoustic panelling, the dark grey of every photo studio ever built.
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x10141a, roughness: 0.95, metalness: 0.0, envMapIntensity: 0.1 })
+  const backPad = new THREE.Mesh(new THREE.BoxGeometry(POD_W * 0.92, POD_H * 0.82, 0.04), wallMat)
+  backPad.position.set(0, POD_H * 0.45, -POD_D / 2 + T)
+  interior.add(backPad)
+
+  // The mark on the floor — and the scale. Standing on it is the measurement.
+  const markMat = new THREE.MeshBasicMaterial({ color: 0xeaf4ff })
+  const mark = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.018, 8, 40), markMat)
+  mark.rotation.x = -Math.PI / 2
+  mark.position.set(0, 0.015, 0.1)
+  interior.add(mark)
+
+  // Camera module on the back wall: housing, lens, and the ring that tells you
+  // what it is doing without reading anything.
+  const housing = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.92, 0.1), MAT.trim)
+  housing.position.set(POD_W * 0.26, POD_H * 0.58, -POD_D / 2 + 0.14)
+  interior.add(housing)
+
+  const ringLightMat = new THREE.MeshBasicMaterial({ color: 0xff4d57 })
+  const ringLight = new THREE.Mesh(new THREE.TorusGeometry(0.115, 0.026, 8, 28), ringLightMat)
+  ringLight.position.set(POD_W * 0.26, POD_H * 0.78, -POD_D / 2 + 0.2)
+  interior.add(ringLight)
+
+  const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.085, 0.07, 16), MAT.steel)
+  lens.rotation.x = Math.PI / 2
+  lens.position.set(POD_W * 0.26, POD_H * 0.78, -POD_D / 2 + 0.2)
+  interior.add(lens)
+
+  // The screen the member reads the cues off.
+  const screenMat = new THREE.MeshBasicMaterial({ color: 0x1b2f4a })
+  const screenM = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.52), screenMat)
+  screenM.position.set(POD_W * 0.26, POD_H * 0.42, -POD_D / 2 + 0.2)
+  interior.add(screenM)
+
+  // Two softboxes down the side walls: this is the product, physically.
+  const boxMat = new THREE.MeshBasicMaterial({ color: 0x20262e })
+  const softL = new THREE.Mesh(new THREE.PlaneGeometry(0.3, POD_H * 0.68), boxMat)
+  softL.rotation.y = Math.PI / 2
+  softL.position.set(-POD_W / 2 + T, POD_H * 0.5, 0.1)
+  interior.add(softL)
+  const softR = softL.clone()
+  softR.material = boxMat.clone()
+  softR.rotation.y = -Math.PI / 2
+  softR.position.x = POD_W / 2 - T
+  interior.add(softR)
+
+  // ── the person ────────────────────────────────────────────────────────
+  const skin = new THREE.MeshStandardMaterial({ color: 0xb08063, roughness: 0.68, metalness: 0.02, envMapIntensity: 0.12 })
+  const kit = new THREE.MeshStandardMaterial({ color: 0x12151a, roughness: 0.88, envMapIntensity: 0.12 })
+  const figure = new THREE.Group()
+  figure.position.set(0, 0, 0.1)
+  figure.visible = false
+  interior.add(figure)
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.108, 18, 14), skin)
+  head.position.y = 1.66
+  figure.add(head)
+  // Without a front, a back pose and a front pose are the same silhouette and
+  // the cue to turn around means nothing. This is the whole face.
+  const face = new THREE.Mesh(
+    new THREE.SphereGeometry(0.104, 14, 10, 0, Math.PI, 0.6, 1.1),
+    new THREE.MeshStandardMaterial({ color: 0x3b2a22, roughness: 0.9 }),
+  )
+  face.rotation.y = -Math.PI / 2
+  face.position.y = 1.66
+  figure.add(face)
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 0.4, 6, 14), skin)
+  torso.position.y = 1.28
+  torso.scale.set(1.25, 1, 0.74)
+  figure.add(torso)
+  const hips = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.12, 5, 12), kit)
+  hips.position.y = 0.92
+  hips.scale.set(1.15, 1, 0.8)
+  figure.add(hips)
+
+  const limb = (len, r, mat) => new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 5, 10), mat)
+  const arms = []
+  for (const side of [-1, 1]) {
+    // Each arm is a group hinged at the shoulder, so a pose is two rotations.
+    const shoulder = new THREE.Group()
+    shoulder.position.set(side * 0.25, 1.46, 0)
+    const upper = limb(0.26, 0.055, skin)
+    upper.position.y = -0.17
+    shoulder.add(upper)
+    const elbow = new THREE.Group()
+    elbow.position.y = -0.34
+    const fore = limb(0.24, 0.05, skin)
+    fore.position.y = -0.16
+    elbow.add(fore)
+    shoulder.add(elbow)
+    figure.add(shoulder)
+    arms.push({ shoulder, elbow, side })
+  }
+  for (const side of [-1, 1]) {
+    const leg = limb(0.62, 0.075, kit)
+    leg.position.set(side * 0.1, 0.52, 0)
+    figure.add(leg)
+  }
+
+  // ── the lighting rig, which is the whole point ────────────────────────
+  const keyL = new THREE.PointLight(PRESETS[0].hex, 0, 5.5, 2)
+  keyL.position.fromArray(PRESETS[0].keyPos)
+  interior.add(keyL)
+  const fillL = new THREE.PointLight(PRESETS[0].hex, 0, 5.5, 2)
+  fillL.position.fromArray(PRESETS[0].fillPos)
+  interior.add(fillL)
+  const rimL = new THREE.PointLight(0xffffff, 0, 4.5, 2)
+  rimL.position.fromArray(PRESETS[0].rimPos)
+  interior.add(rimL)
+
+  // ── the door, hinged on its left edge ─────────────────────────────────
+  const hinge = new THREE.Group()
+  hinge.position.set(-DOOR_W / 2, DOOR_H / 2, POD_D / 2)
+  g.add(hinge)
+  const door = new THREE.Mesh(new THREE.BoxGeometry(DOOR_W, DOOR_H, 0.055), MAT.door)
+  door.position.set(DOOR_W / 2, 0, 0)
+  hinge.add(door)
 
   // The seam around the door, which glows with the preset while capturing
   const seamMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.0 })
-  const seam = new THREE.Mesh(new THREE.PlaneGeometry(POD_W * 0.78, POD_H * 0.9), seamMat)
+  const seam = new THREE.Mesh(new THREE.PlaneGeometry(POD_W * 0.785, POD_H * 0.9), seamMat)
   seam.position.set(0, POD_H * 0.44, POD_D / 2 + 0.002)
   g.add(seam)
 
   // Unlit, a black door on a black box disappears. This is the thin catch of
   // light every real panel edge has, and it is what makes the shape legible.
   const edge = new THREE.Mesh(
-    new THREE.PlaneGeometry(POD_W * 0.745, POD_H * 0.865),
+    new THREE.PlaneGeometry(DOOR_W * 0.985, DOOR_H * 0.985),
     new THREE.MeshBasicMaterial({ color: 0x2e3a48, transparent: true, opacity: 0.5 }),
   )
-  edge.position.set(0, POD_H * 0.44, POD_D / 2 + 0.004)
-  g.add(edge)
+  edge.position.set(DOOR_W / 2, 0, 0.032)
+  hinge.add(edge)
 
   // Handle
   const handle = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.42, 0.05), MAT.steel)
-  handle.position.set(POD_W * 0.28, POD_H * 0.44, POD_D / 2 + 0.07)
-  g.add(handle)
+  handle.position.set(DOOR_W * 0.9, 0, 0.06)
+  hinge.add(handle)
 
   // Status light bar above the door
   const barMat = new THREE.MeshBasicMaterial({ color: 0x3ddc84 })
@@ -549,11 +761,6 @@ function buildPod(index, count) {
   glow.position.set(0, POD_H * 0.93, POD_D / 2 + 0.09)
   g.add(glow)
 
-  // Interior light, only on while the pod is working — it leaks around the door
-  const inner = new THREE.PointLight(0xffb867, 0, 7, 2)
-  inner.position.set(0, POD_H * 0.55, POD_D / 2 - 0.4)
-  g.add(inner)
-
   const x = (index - (count - 1) / 2) * (POD_W + GAP)
   g.position.set(x, 0, -Math.abs(index - (count - 1) / 2) * 0.3)
 
@@ -567,7 +774,7 @@ function buildPod(index, count) {
   ring.position.set(0, 0.008, POD_D / 2 - 0.4)
   g.add(ring)
 
-  g.userData = { barMat, spillMat, glowMat, seamMat, ringMat, inner, index }
+  g.userData = { barMat, spillMat, glowMat, seamMat, ringMat, ringLightMat, markMat, screenMat, hinge, figure, arms, keyL, fillL, rimL, index }
   return g
 }
 
@@ -631,16 +838,19 @@ function buildRoom() {
 
 // ── lights ─────────────────────────────────────────────────────────────────
 
-const ambient = new THREE.AmbientLight(0x2d3a4a, 0.42)
+// Deliberately low. The room is meant to be dark; what light there is comes
+// from the pods, and a preset only reads as a preset if its shadow side is
+// actually dark. The exterior key below carries the shapes instead.
+const ambient = new THREE.AmbientLight(0x27323f, 0.5)
 scene.add(ambient)
 
 // A cool overhead from the front-left: enough to find the top edges of the
 // pods without lighting the room. The pods are meant to be the light in here.
-const key = new THREE.DirectionalLight(0x9fb6d4, 0.85)
+const key = new THREE.DirectionalLight(0x9fb6d4, 1.15)
 key.position.set(-9, 14, 11)
 scene.add(key)
 
-const top = new THREE.SpotLight(0xbcd2ee, 26, 26, 0.72, 0.9, 1.6)
+const top = new THREE.SpotLight(0xbcd2ee, 34, 26, 0.72, 0.9, 1.6)
 top.position.set(0, 7.0, 3.4)
 top.target.position.set(0, 0, 1.2)
 scene.add(top)
@@ -649,6 +859,12 @@ scene.add(top.target)
 const rim = new THREE.DirectionalLight(0x2b3a52, 0.6)
 rim.position.set(10, 7, -12)
 scene.add(rim)
+
+for (const l of [ambient, key, top, rim]) {
+  l.userData.base = l.intensity
+  ROOM_LIGHTS.push(l)
+}
+const baseEnv = scene.environmentIntensity
 
 // ── camera rig ─────────────────────────────────────────────────────────────
 
@@ -712,10 +928,12 @@ canvas.addEventListener('click', (e) => {
 
 function framePod(index, count) {
   const x = (index - (count - 1) / 2) * (POD_W + GAP)
-  cam.goalTarget.set(x, 1.35, 0.6)
-  cam.goalDist = 6.6
-  cam.goalPitch = 0.1
-  cam.goalYaw = -0.2
+  // Square on and close: the door opens toward the viewer's left, so a small
+  // yaw to the right keeps it out of the way of what it is revealing.
+  cam.goalTarget.set(x + 0.15, 1.25, 0.1)
+  cam.goalDist = 6.5
+  cam.goalPitch = 0.07
+  cam.goalYaw = 0.1
   cam.auto = false
 }
 
@@ -768,23 +986,111 @@ function paintPods() {
     // The door seam leaks the preset colour while the lights are up inside.
     const leaking = pod.state === 'capture' || pod.state === 'setup'
     d.seamMat.color.setHex(pod.preset.hex)
-    d.seamMat.opacity += ((leaking ? 0.22 : 0) - d.seamMat.opacity) * 0.08
-    d.inner.color.setHex(pod.preset.hex)
-    const want = leaking ? pod.preset.key * 2.6 : 0
-    d.inner.intensity += (want - d.inner.intensity) * 0.08
+    d.seamMat.opacity += ((leaking ? 0.26 : 0) - d.seamMat.opacity) * k
 
     // Selection: lift the pod a hair and put a pool of light under it.
     const chosen = sim.selectedPod === pod
     const wantY = chosen ? 0.06 : 0
-    rig.position.y += (wantY - rig.position.y) * 0.12
-    d.ringMat.opacity += ((chosen ? 0.3 : 0) - d.ringMat.opacity) * 0.1
+    rig.position.y += (wantY - rig.position.y) * k
+    d.ringMat.opacity += ((chosen ? 0.3 : 0) - d.ringMat.opacity) * k
+
+    // ── the inside ──────────────────────────────────────────────────────
+    //
+    // A real pod keeps its door shut while someone is in it. Selecting one is
+    // an operator asking to look: the door swings, the rig comes up on
+    // whichever preset that session chose, and the figure takes the pose the
+    // cue is currently asking for. Nothing here is decoration — every value
+    // comes from the session the simulation is running.
+    const open = chosen ? 1 : 0
+    d.hinge.rotation.y += (open * -2.05 - d.hinge.rotation.y) * k
+
+    const lit = chosen && working
+    const p = pod.preset
+    d.keyL.color.setHex(p.hex)
+    d.fillL.color.setHex(p.hex)
+    d.keyL.intensity += ((lit ? p.key * 2.7 : 0) - d.keyL.intensity) * k
+    d.fillL.intensity += ((lit ? p.fill * 2.7 : 0) - d.fillL.intensity) * k
+    d.rimL.intensity += ((lit ? p.rim * 1.9 : 0) - d.rimL.intensity) * k
+
+    // The lights travel to the preset's positions rather than just changing
+    // colour, so switching look rearranges the rig in front of you.
+    glide(d.keyL.position, p.keyPos, k)
+    glide(d.fillL.position, p.fillPos, k)
+    glide(d.rimL.position, p.rimPos, k)
+
+    // House white when the door is open but nothing is running, so an empty
+    // pod is legible rather than a black hole.
+    if (chosen && !working) {
+      d.keyL.color.setHex(0xdfe9f6)
+      d.keyL.intensity += (1.5 - d.keyL.intensity) * k
+      d.fillL.color.setHex(0xdfe9f6)
+      d.fillL.intensity += (0.9 - d.fillL.intensity) * k
+    }
+
+    d.markMat.color.setHex(pod.state === 'setup' ? 0x3ddc84 : 0xeaf4ff)
+    d.ringLightMat.color.setHex(
+      pod.state === 'capture' ? 0xff4d57 : pod.state === 'setup' ? 0xf5a524 : 0x2a333f,
+    )
+    d.screenMat.color.setHex(pod.state === 'capture' ? 0x3a1620 : 0x16233a)
+
+    d.figure.visible = !!pod.member && pod.state !== 'reset'
+    if (d.figure.visible) poseFigure(d, pod)
   }
+}
+
+/**
+ * Puts the figure in the pose the cue is currently asking for.
+ *
+ * Three rotations each side is enough: a double bicep is shoulders out and
+ * elbows folded, a side chest is one arm across, relaxed is arms down with a
+ * few degrees of flare. Back poses turn the whole figure around, which is what
+ * makes the cue legible from outside the pod.
+ */
+const POSE_RIG = {
+  'Front relaxed':      { turn: 0, sh: [0.16, 0.0], el: 0.1 },
+  'Side profile':       { turn: Math.PI / 2, sh: [0.2, 0.1], el: 0.35 },
+  'Back relaxed':       { turn: Math.PI, sh: [0.16, 0.0], el: 0.1 },
+  'Front double bicep': { turn: 0, sh: [1.75, -0.35], el: 1.75 },
+  'Back double bicep':  { turn: Math.PI, sh: [1.75, -0.35], el: 1.75 },
+  'Side chest':         { turn: Math.PI / 2.4, sh: [0.95, 0.3], el: 1.5 },
+  'Lat spread':         { turn: Math.PI, sh: [1.0, 0.2], el: 1.1 },
+}
+const POSE_IDLE = { turn: 0, sh: [0.12, 0], el: 0.06 }
+
+/** Eases a light toward a preset's position, in pod-local space. */
+function glide(v, to, t) {
+  v.x += (to[0] - v.x) * t
+  v.y += (to[1] - v.y) * t
+  v.z += (to[2] - v.z) * t
+}
+
+function poseFigure(d, pod) {
+  const wanted = pod.state === 'capture' ? POSE_RIG[pod.poses[pod.poseIndex]] || POSE_IDLE : POSE_IDLE
+  d.figure.rotation.y += (wanted.turn - d.figure.rotation.y) * k
+  for (const arm of d.arms) {
+    const z = arm.side * wanted.sh[0]
+    arm.shoulder.rotation.z += (z - arm.shoulder.rotation.z) * k
+    arm.shoulder.rotation.x += (wanted.sh[1] - arm.shoulder.rotation.x) * k
+    arm.elbow.rotation.z += (arm.side * -wanted.el - arm.elbow.rotation.z) * k
+  }
+  // A held pose is not a frozen one.
+  const breathe = Math.sin(clock * 1.7) * 0.006
+  d.figure.position.y = breathe
 }
 
 let clock = 0
 
+/*
+ * Every easing below is written against `k`, not a fixed fraction per frame.
+ * A constant 0.1 a frame means a door that takes half a second to open on a
+ * 60 Hz machine takes seven seconds at 1 fps — which is exactly what happened,
+ * and it made a correct pose look like a broken one in every screenshot.
+ */
+let k = 0.1
+
 function renderFrame(dt) {
   clock += dt
+  k = 1 - Math.exp(-7 * dt)
   if (cam.auto) cam.goalYaw += dt * 0.035
 
   cam.yaw += (cam.goalYaw - cam.yaw) * Math.min(1, dt * 3.4)
@@ -799,6 +1105,12 @@ function renderFrame(dt) {
     cam.target.z + Math.cos(cam.yaw) * cam.dist * cp,
   )
   camera.lookAt(cam.target)
+
+  // Down to a tenth while a pod is open, so the preset inside is the only
+  // thing lighting the person in it.
+  roomDim += ((sim.selectedPod ? 0.06 : 1) - roomDim) * k
+  for (const l of ROOM_LIGHTS) l.intensity = l.userData.base * roomDim
+  scene.environmentIntensity = baseEnv * roomDim
 
   paintPods()
   resize()
@@ -835,6 +1147,7 @@ el.siteSelect.innerHTML = SITES.map((s, i) => `<option value="${i}">${esc(s.id)}
 el.siteSelect.addEventListener('change', () => {
   sim.siteIndex = Number(el.siteSelect.value)
   sim.selectedPod = null
+  alertSig = feedSig = ''
   buildBank(site().pods.length)
   frameBank()
   renderAll()
@@ -867,39 +1180,78 @@ function renderKpis() {
 
 // ── pods ───────────────────────────────────────────────────────────────────
 
-function renderPods() {
-  if (el.pods.contains(document.activeElement)) return
+/*
+ * Rows are created when the site changes and then mutated in place, for the
+ * same reason the presets are. Rebuilding this list five times a second made
+ * every row un-clickable without changing how it looked.
+ */
+let podRowsFor = null
+
+function buildPodRows() {
   const s = site()
+  el.pods.innerHTML = s.pods.map((p) => `
+    <button class="pod" data-pod="${p.index}">
+      <span class="pod-id mono">${esc(p.id)}</span>
+      <span class="pod-mid">
+        <span class="pod-state"></span>
+        <span class="pod-who"></span>
+      </span>
+      <span class="pod-right">
+        <span class="swatch" hidden></span>
+        <span class="bar" hidden><i></i></span>
+        <span class="dot"></span>
+      </span>
+    </button>`).join('')
+  podRowsFor = `${s.id}:${s.pods.length}`
+}
+
+function renderPods() {
+  const s = site()
+  if (podRowsFor !== `${s.id}:${s.pods.length}`) buildPodRows()
   const m = metrics(s)
   el.podsSub.textContent = `${m.busy} in use · ${m.live - m.busy} free`
-  el.pods.innerHTML = s.pods.map((p) => {
+
+  const rows = el.pods.children
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const p = s.pods[i]
+    if (!p) continue
     const meta = STATES[p.state]
-    const prog = p.total ? 1 - p.left / p.total : 0
+    const colour = p.state === 'capture' ? p.preset.css : ''
     const sub = p.member ? p.member.name
       : p.state === 'fault' || p.state === 'offline' ? p.note || ''
       : p.sessions ? `${p.sessions} session${p.sessions === 1 ? '' : 's'} today` : 'No sessions yet'
-    const colour = p.state === 'capture' ? p.preset.css : ''
-    return `
-      <button class="pod ${sim.selectedPod === p ? 'sel' : ''}" data-pod="${p.index}">
-        <span class="pod-id mono">${esc(p.id)}</span>
-        <span class="pod-mid">
-          <span class="pod-state">${esc(meta.label)}${p.state === 'capture' ? ` · ${esc(p.poses[p.poseIndex])}` : ''}</span>
-          <span class="pod-who">${esc(sub)}</span>
-        </span>
-        <span class="pod-right">
-          ${colour ? `<span class="swatch" style="background:${colour};color:${colour}"></span>` : ''}
-          ${p.total ? `<span class="bar"><i style="width:${Math.round(prog * 100)}%;background:${colour || 'var(--free)'}"></i></span>` : ''}
-          <span class="dot ${meta.colour === 'free' ? '' : meta.colour}"></span>
-        </span>
-      </button>`
-  }).join('')
+
+    row.classList.toggle('sel', sim.selectedPod === p)
+    row.querySelector('.pod-state').textContent =
+      meta.label + (p.state === 'capture' ? ` · ${p.poses[p.poseIndex]}` : '')
+    row.querySelector('.pod-who').textContent = sub
+
+    const swatch = row.querySelector('.swatch')
+    swatch.hidden = !colour
+    if (colour) { swatch.style.background = colour; swatch.style.color = colour }
+
+    const bar = row.querySelector('.bar')
+    bar.hidden = !p.total
+    if (p.total) {
+      const fill = bar.firstElementChild
+      fill.style.width = `${Math.round((1 - p.left / p.total) * 100)}%`
+      fill.style.background = colour || 'var(--free)'
+    }
+    row.querySelector('.dot').className = `dot ${meta.colour === 'free' ? '' : meta.colour}`
+  }
 }
 
 // ── alerts ─────────────────────────────────────────────────────────────────
 
+let alertSig = ''
+
 function renderAlerts() {
   if (el.alerts.contains(document.activeElement)) return
   const s = site()
+  const sig = s.id + s.alerts.map((a) => a.id + a.title).join('|')
+  if (sig === alertSig) return
+  alertSig = sig
   el.alertsSub.textContent = s.alerts.length ? `${s.alerts.length} open` : 'clear'
   if (!s.alerts.length) {
     el.alerts.innerHTML = '<div class="empty">Nothing needs you.</div>'
@@ -917,8 +1269,14 @@ function renderAlerts() {
 
 // ── feed ───────────────────────────────────────────────────────────────────
 
+let feedSig = ''
+
 function renderFeed() {
   const s = site()
+  const top = s.events[0]
+  const sig = `${s.id}:${s.events.length}:${top ? top.at + top.text : ''}`
+  if (sig === feedSig) return
+  feedSig = sig
   el.feedSub.textContent = `${s.events.length} events`
   el.feed.innerHTML = s.events.slice(0, 26).map((e) => `
     <div class="ev">
@@ -933,14 +1291,25 @@ function renderFeed() {
 
 let viewPreset = PRESETS[0]
 
+/*
+ * Built once. An earlier version rebuilt these four buttons on every UI tick,
+ * which looks identical in a screenshot and is wrong in two ways: the node you
+ * press is gone before you release it, and a browser automating the page can
+ * never satisfy its own "is this element stable" check. Nothing that a person
+ * can click should be rebuilt on a timer — only its state should change.
+ */
+el.presets.innerHTML = PRESETS.map((p) => `
+  <button class="preset" data-preset="${p.id}" aria-pressed="false" title="${esc(p.note)}">
+    <span class="chip" style="background:linear-gradient(180deg, ${p.css}, rgba(0,0,0,0.6))"></span>
+    ${esc(p.name)}
+  </button>`).join('')
+
 function renderPresets() {
   const shown = sim.selectedPod && sim.selectedPod.member ? sim.selectedPod.preset : viewPreset
   el.presetName.textContent = shown.name
-  el.presets.innerHTML = PRESETS.map((p) => `
-    <button class="preset" data-preset="${p.id}" aria-pressed="${p.id === shown.id}" title="${esc(p.note)}">
-      <span class="chip" style="background:linear-gradient(180deg, ${p.css}, rgba(0,0,0,0.6))"></span>
-      ${esc(p.name)}
-    </button>`).join('')
+  for (const b of el.presets.children) {
+    b.setAttribute('aria-pressed', String(b.dataset.preset === shown.id))
+  }
 }
 
 // ── the product: pod screen and member app ─────────────────────────────────
@@ -1047,34 +1416,54 @@ function podScreen(pod) {
     <div class="ps-foot"><span class="ps-sub">Automatic · no staff needed</span></div>`
 }
 
+const DEMO_MEMBER = makeMember()
+
+/*
+ * The member's side.
+ *
+ * It leads with then-and-now rather than with today's photo, because the claim
+ * the product rests on is that the two frames are comparable: same light, same
+ * marks, same lens, and a weight the floor measured rather than one typed in
+ * afterwards. A single flattering picture is what a phone already does.
+ */
 function memberApp(pod) {
-  const m = pod && pod.member ? pod.member : { name: 'Mara A.', weight: 68.4, delta: -0.6, streak: 9, visits: 23 }
+  const m = pod && pod.member ? pod.member : DEMO_MEMBER
   const preset = pod ? pod.preset : viewPreset
   const captured = pod && (pod.state === 'review' || pod.state === 'reset')
-  const poses = pod ? pod.poses : POSES.standard
+  const first = m.history[0]
+  const better = m.since <= 0
+
   return `
     <div class="ph-head">
       <div class="ph-name">${esc(m.name)}</div>
-      <div class="ph-meta">${captured ? 'Just now' : 'Last session'} · ${esc(preset.name)} · ${esc(site().name)}</div>
+      <div class="ph-meta">${captured ? 'Captured just now' : 'Last session'} · ${esc(preset.name)} · visit ${m.visits}</div>
     </div>
-    <div class="ph-hero">
-      <div class="wash" style="background:radial-gradient(60% 70% at 50% 35%, ${preset.css}33, transparent 70%)"></div>
-      ${silhouette(preset.css).replace('class="silhouette"', 'class="silhouette" style="width:132px;position:relative"')}
+
+    <div class="ph-compare">
+      <figure>
+        <div class="frame" style="background:radial-gradient(64% 70% at 50% 34%, ${preset.css}1f, #07090c 72%)">
+          ${silhouette('#5b6878').replace('class="silhouette"', 'class="silhouette" style="width:68px;opacity:0.7"')}
+        </div>
+        <figcaption>${m.spanWeeks} weeks ago<b class="mono">${first} kg</b></figcaption>
+      </figure>
+      <figure>
+        <div class="frame" style="background:radial-gradient(64% 70% at 50% 34%, ${preset.css}40, #07090c 72%)">
+          ${silhouette(preset.css).replace('class="silhouette"', 'class="silhouette" style="width:68px"')}
+        </div>
+        <figcaption>Today<b class="mono">${m.weight} kg</b></figcaption>
+      </figure>
     </div>
-    <div class="ph-strip">
-      ${poses.map((p, i) => `<div class="${i === 0 ? 'pick' : ''}" title="${esc(p)}" style="background:linear-gradient(170deg, ${preset.css}22, #0a0d12)"></div>`).join('')}
-      <div style="background:linear-gradient(170deg, ${preset.css}14, #0a0d12)" title="30s clip"></div>
+
+    <div class="ph-verdict ${better ? 'up' : 'down'}">
+      ${m.since > 0 ? '+' : ''}${m.since} kg over ${m.spanWeeks} weeks
+      <span>Both frames shot under the same light, from the same marks.</span>
     </div>
+
     <dl class="ph-stats">
       <div class="ph-stat"><dt>Weight</dt><dd class="mono">${m.weight}<span class="d"> kg</span></dd></div>
       <div class="ph-stat"><dt>vs last</dt><dd class="mono ${m.delta <= 0 ? 'up' : 'down'}">${m.delta > 0 ? '+' : ''}${m.delta}<span class="d"> kg</span></dd></div>
       <div class="ph-stat"><dt>Streak</dt><dd class="mono">${m.streak}<span class="d"> wk</span></dd></div>
-    </dl>
-    <div class="ph-actions">
-      <button class="primary" data-act="keep">Save to profile</button>
-      <button data-act="wipe">Send &amp; wipe</button>
-      <button data-act="reel">Make reel</button>
-    </div>`
+    </dl>`
 }
 
 /**
@@ -1101,6 +1490,8 @@ $('tab-pod').addEventListener('click', () => setTab('pod'))
 $('tab-app').addEventListener('click', () => setTab('app'))
 function setTab(t) {
   sim.tab = t
+  document.getElementById('screen').dataset.tab = t
+  document.getElementById('phone-actions').hidden = t !== 'app'
   $('tab-pod').setAttribute('aria-selected', String(t === 'pod'))
   $('tab-app').setAttribute('aria-selected', String(t === 'app'))
   renderScreen()
@@ -1424,6 +1815,7 @@ warmUp(Math.round(openAt * 60))
 buildBank(site().pods.length)
 cam.dist = cam.goalDist = bankDist(site().pods.length)
 if (reducedMotion) cam.auto = false
+setTab('pod')
 renderAll()
 
 let last = performance.now()
@@ -1473,6 +1865,8 @@ window.__podium = {
   get site() { return site().id },
   get pods() { return site().pods.map((p) => ({ id: p.id, state: p.state, left: Math.round(p.left), preset: p.preset.id })) },
   get metrics() { return metrics(site()) },
+  // For diagnosing the scene from a driver script rather than by eye.
+  three: { scene, renderer, camera },
 }
 
 requestAnimationFrame((t) => { last = t; loop(t) })

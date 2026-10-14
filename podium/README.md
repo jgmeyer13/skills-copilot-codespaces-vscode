@@ -58,3 +58,23 @@ drives every control and reports console errors; `node shoot.mjs` captures
 desktop and phone; `node boxes.mjs` dumps element geometry at phone width.
 
 Every name, gym, member and number in here is invented.
+
+## Opening a pod
+
+Selecting a pod swings its door and lights the interior with whichever preset
+that session chose, with the figure in the pose the cue is currently asking
+for. The four presets move the lights rather than tinting them — Noir is one
+hard source directly overhead, Halo is two broad sources either side at chest
+height — because that difference is the argument for a box with a door rather
+than an app.
+
+Two things worth knowing about the scene:
+
+- Nothing casts a shadow, so the room's lights were reaching through the pod
+  walls and filling the shadow side of every preset. `light.layers` does not
+  fix that: three.js's forward renderer builds one light list per scene, so a
+  light reaches objects on every layer. The room dims to 6% while a pod is open
+  instead, which is what a photographer does with the overheads anyway.
+- Nothing in the lists is rebuilt on a timer. An earlier version redrew the pod
+  rows and the preset buttons five times a second, which looks identical in a
+  screenshot and means the node you press is gone before you release it.

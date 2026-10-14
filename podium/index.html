@@ -273,9 +273,19 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible {
   position: relative; border-radius: var(--r-xl); overflow: hidden;
   border: 1px solid var(--edge); background: #05070a;
   box-shadow: var(--shadow);
-  width: 100%; height: clamp(360px, 52vh, 580px); flex: 0 0 auto;
+  width: 100%; height: clamp(320px, 43vh, 520px); flex: 0 0 auto;
 }
 .screen-inner { position: absolute; inset: 0; display: flex; flex-direction: column; }
+/* The action row is pinned to the bottom of the panel and the body above it
+   leaves room, rather than the row being part of what gets redrawn. */
+#phone-actions { position: absolute; left: 0; right: 0; bottom: 0; }
+/* `.ph-actions` sets `display: flex`, which beats the `hidden` attribute's UA
+   `display: none` — so the phone's buttons sat on top of the pod screen. */
+#phone-actions[hidden] { display: none; }
+/* The app view is taller than the panel on short screens, so it scrolls above
+   the pinned action row rather than painting over it. */
+.screen[data-tab='app'] .screen-inner { bottom: 118px; overflow-y: auto; scrollbar-width: none; }
+.screen[data-tab='app'] .screen-inner::-webkit-scrollbar { width: 0; }
 
 /* pod screen */
 .ps-top { display: flex; align-items: center; justify-content: space-between; padding: var(--s4); font-size: var(--fs-micro); color: var(--text-3); letter-spacing: 0.1em; text-transform: uppercase; }
@@ -302,6 +312,26 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible {
 .ph-meta { font-size: var(--fs-micro); color: var(--text-3); margin-top: 2px; }
 .ph-hero { flex: 1; position: relative; background: #0a0d12; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .ph-hero .wash { position: absolute; inset: 0; opacity: 0.5; }
+/* Then and now, the same size, side by side. The comparison is the product. */
+.ph-compare { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); padding: var(--s3) var(--s4) 0; }
+.ph-compare figure { margin: 0; }
+.ph-compare .frame {
+  aspect-ratio: 1 / 1; border-radius: var(--r-md); border: 1px solid var(--hair);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.ph-compare figure:last-child .frame { border-color: rgba(61, 220, 132, 0.4); }
+.ph-compare figcaption {
+  display: flex; justify-content: space-between; align-items: baseline; gap: var(--s2);
+  margin-top: 5px; font-size: var(--fs-micro); color: var(--text-3);
+}
+.ph-compare figcaption b { color: var(--text-2); font-size: var(--fs-small); font-weight: 600; }
+
+.ph-verdict {
+  padding: var(--s3) var(--s4) 0; font-size: var(--fs-small); font-weight: 650;
+}
+.ph-actions { gap: 5px; padding: var(--s2) var(--s4) var(--s3); }
+.ph-verdict span { display: block; font-weight: 400; color: var(--text-3); font-size: var(--fs-micro); margin-top: 2px; line-height: 1.5; }
+
 .ph-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: var(--s3) var(--s4); }
 .ph-strip div { aspect-ratio: 3/4; border-radius: var(--r-sm); border: 1px solid var(--hair); position: relative; overflow: hidden; }
 .ph-strip div.pick { border-color: var(--free); box-shadow: 0 0 0 1px var(--free); }
@@ -312,7 +342,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible {
 .up { color: var(--free); } .down { color: var(--busy); }
 .ph-actions { padding: var(--s3) var(--s4) var(--s4); display: flex; flex-direction: column; gap: var(--s2); }
 .ph-actions button {
-  width: 100%; padding: 9px; border-radius: var(--r-md); font-size: var(--fs-body); font-weight: 600;
+  width: 100%; padding: 7px; border-radius: var(--r-md); font-size: var(--fs-body); font-weight: 600;
   background: rgba(255,255,255,0.08); border: 1px solid var(--edge);
 }
 .ph-actions button.primary { background: var(--free); color: #052712; border-color: var(--free); }
@@ -513,7 +543,17 @@ table.risks td:first-child { color: var(--text); font-weight: 550; white-space: 
           <button role="tab" id="tab-app" aria-selected="false" aria-controls="screen">Member app</button>
         </div>
 
-        <div class="screen" id="screen"><div class="screen-inner" id="screen-inner"></div></div>
+        <div class="screen" id="screen">
+          <div class="screen-inner" id="screen-inner"></div>
+          <!-- Outside the rebuilt body on purpose: these are the only buttons
+               on this panel, and a button that is replaced on a timer cannot
+               be pressed. -->
+          <div class="ph-actions" id="phone-actions" hidden>
+            <button class="primary" data-act="keep">Save to profile</button>
+            <button data-act="wipe">Send &amp; wipe</button>
+            <button data-act="reel">Make reel</button>
+          </div>
+        </div>
 
         <section class="card">
           <div class="card-head"><h2 class="card-title">Lighting</h2><span class="card-title" id="preset-name">Stage</span></div>
