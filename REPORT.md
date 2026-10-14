@@ -178,7 +178,7 @@ valid implementation. The UI degrades by leaving a control inert, not by breakin
 
 ## 5. Bugs worth recording
 
-Seven real defects. I'm listing them because how each was caught is the useful
+Eight real defects. I'm listing them because how each was caught is the useful
 part — none came from reading the code.
 
 **Shared module state broke determinism — twice.** Task-slot reservations and
@@ -236,6 +236,17 @@ test passed, because the e2e test waits for a result row before pressing Enter.
 I found it by scripting the app and driving it the way a person does: open,
 type, Enter, with no waiting in between. The fix was to stop resetting state
 and let the component unmount when closed, so a fresh mount is the reset.
+
+**The inspector painted over the top bar's dropdowns and ate their clicks.**
+`.dashboard` carries a `z-index`, which makes it a stacking context, so the
+site switcher's popover at `z-index: 40` was scoped *inside* it — while the
+inspector sat beside it at `z-index: 8` and beat the whole subtree. Searching
+for a site opens the inspector, so the very next click on the site switcher
+silently did nothing. Found by driving the app rather than testing it: a
+`document.elementFromPoint` on the menu option came back `.inspector-kind`.
+The inspector is now a child of the dashboard, so one stacking context governs
+all the chrome, and an e2e test asserts the dropdown is genuinely on top rather
+than merely present in the DOM.
 
 **The frame-delta clamp makes the engine run slow at very low frame rates.**
 Each frame advances the simulation by at most 250 ms of wall time, so a
@@ -358,12 +369,15 @@ physics, but a domain expert would find them naive.
 simulate a whole day. I trimmed the worst of it, but a proper build would
 separate fast property tests from a slow nightly soak.
 
-*My tests were politer to the app than a person is.* The palette bug above sat
-behind a green suite because the test waited for a result to render before
-pressing Enter — a reasonable thing for a test to do and not at all what a user
-does. Driving the app end to end as a last step found it in one run. I should
-have done that much earlier and more often, rather than treating a passing suite
-as the same thing as a working app.
+*My tests were politer to the app than a person is.* Two of the bugs above sat
+behind a green suite. The palette one survived because the test waited for a
+result to render before pressing Enter — reasonable for a test, not what a user
+does. The stacking one survived because the site-switcher test opened the
+switcher on a clean screen, where nothing was overlapping it; a person searches
+for a site first, which opens the inspector, and then the dropdown is dead.
+Both fell out of one scripted run that just used the app in order. I should have
+been doing that from the first hour, not the last, and I should stop treating a
+passing suite as the same thing as a working app.
 
 *I did not do a formal accessibility audit.* Keyboard access, focus management,
 reduced motion and live regions are all implemented and spot-checked, but I ran

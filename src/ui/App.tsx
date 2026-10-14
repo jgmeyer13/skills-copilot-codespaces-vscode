@@ -94,9 +94,15 @@ export function App(): React.ReactElement {
         <div className="floating-camera">
           <CameraControls />
         </div>
+
+        {/* Inside the dashboard, not beside it. `.dashboard` carries a z-index
+            and therefore creates a stacking context, so an inspector rendered as
+            its sibling painted over the top bar's dropdowns whatever z-index
+            they carried — and swallowed their clicks. */}
+        <Inspector />
       </div>
 
-      <Inspector />
+      {/* Deliberately outside: these are meant to cover everything. */}
       {paletteOpen && <CommandPalette />}
       <ShortcutSheet />
       <Toasts />

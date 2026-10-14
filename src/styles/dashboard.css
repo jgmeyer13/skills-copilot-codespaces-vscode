@@ -913,10 +913,16 @@
 
 /* ── Inspector ────────────────────────────────────────────────────────────── */
 
+/*
+ * A child of .dashboard, whose padding box already accounts for the top
+ * safe-area inset, so `top` must not add it a second time. The z-index sits
+ * below the top bar's popovers (40) on purpose: a dropdown you just opened
+ * belongs above a panel that was already sitting there.
+ */
 .inspector {
   position: absolute;
   left: calc(var(--left-w) + var(--s6));
-  top: calc(var(--topbar-h) + var(--s4) + env(safe-area-inset-top, 0px));
+  top: calc(var(--topbar-h) + var(--s4));
   width: 282px;
   z-index: 8;
   background: var(--glass-strong);

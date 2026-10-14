@@ -153,6 +153,40 @@ test('the site switcher changes site', async ({ page }) => {
   await expect(page.locator('.panel-site')).toContainText('Gardermoen')
 })
 
+test('the top bar stays clickable with the inspector open', async ({ page }) => {
+  await boot(page)
+
+  // Open the inspector first. It is positioned over the left of the viewport and
+  // overlaps the site switcher's dropdown; if the two end up in different
+  // stacking contexts the inspector swallows the dropdown's clicks, which is
+  // exactly what happened when the inspector was a sibling of the dashboard
+  // rather than a child of it.
+  await page.getByRole('tab', { name: /Forklifts/ }).click()
+  await page.locator('.table tbody tr').first().click()
+  await expect(page.locator('.inspector')).toBeVisible()
+
+  await page.locator('.site-trigger').click()
+  await expect(page.locator('.popover-site')).toBeVisible()
+
+  const option = page.getByRole('menuitemradio', { name: /Gardermoen/ })
+  // Assert the dropdown is genuinely on top, not merely present in the DOM.
+  const box = await option.boundingBox()
+  expect(box).not.toBeNull()
+  const onTop = await page.evaluate(
+    ({ x, y }) => {
+      const el = document.elementFromPoint(x, y)
+      // Guard the null case explicitly: `el?.closest(...)` is undefined when
+      // there is no element there at all, and `undefined !== null` is true.
+      return el !== null && el.closest('.popover-site') !== null
+    },
+    { x: (box?.x ?? 0) + (box?.width ?? 0) / 2, y: (box?.y ?? 0) + (box?.height ?? 0) / 2 },
+  )
+  expect(onTop, 'something is painting over the site switcher dropdown').toBe(true)
+
+  await option.click()
+  await expect(page.locator('.site-code')).toContainText('OSL-02')
+})
+
 test('bracket keys cycle sites', async ({ page }) => {
   await boot(page)
   const start = await page.locator('.site-code').textContent()

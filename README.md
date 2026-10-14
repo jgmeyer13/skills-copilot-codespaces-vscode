@@ -26,6 +26,18 @@ services, no API keys, no downloaded assets.
 
 > Requires Node 20 or newer.
 
+### Or host it
+
+`.github/workflows/pages.yml` publishes the production build to GitHub Pages so
+it can be opened from anywhere. It only runs when you ask it to, because running
+it makes the app public:
+
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions**
+2. **Actions → Publish dashboard → Run workflow**
+
+The build uses a relative base path, so a project-site subpath needs no extra
+configuration.
+
 ---
 
 ## The two modes
