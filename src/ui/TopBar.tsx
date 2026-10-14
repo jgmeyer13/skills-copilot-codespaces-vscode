@@ -265,6 +265,8 @@ function UserMenu(): React.ReactElement {
   const setOpen = useStore((s) => s.setUserMenuOpen)
   const reducedMotion = useStore((s) => s.reducedMotion)
   const setReducedMotion = useStore((s) => s.setReducedMotion)
+  const perfOpen = useStore((s) => s.perfOpen)
+  const setPerfOpen = useStore((s) => s.setPerfOpen)
   const setHelpOpen = useStore((s) => s.setHelpOpen)
   const ref = useDismiss(open, () => setOpen(false))
 
@@ -310,6 +312,17 @@ function UserMenu(): React.ReactElement {
             />
             <span>Reduce motion</span>
             <span className="menu-hint">Stops camera flights and weather</span>
+          </label>
+          {/* Every shortcut in this app is also reachable by clicking something,
+              and P was the only one that wasn't. */}
+          <label className="menu-toggle">
+            <input
+              type="checkbox"
+              checked={perfOpen}
+              onChange={(event) => setPerfOpen(event.target.checked)}
+            />
+            <span>Frame-rate readout</span>
+            <span className="menu-hint">fps, draw calls and triangles · P</span>
           </label>
           <button
             type="button"

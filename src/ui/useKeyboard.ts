@@ -91,6 +91,11 @@ export function useKeyboard(): void {
           window.dispatchEvent(new CustomEvent('kelvin:camera-preset', { detail: 'site' }))
           break
 
+        case 'p':
+        case 'P':
+          store.setPerfOpen(!store.perfOpen)
+          break
+
         case 'd':
         case 'D':
           store.setDemoMode(!store.demoMode)

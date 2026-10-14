@@ -303,6 +303,36 @@ test('respects reduced motion', async ({ page }) => {
   expect(errors).toEqual([])
 })
 
+test('the frame-rate readout reports live numbers', async ({ page }) => {
+  await boot(page)
+
+  await expect(page.locator('.perf')).toBeHidden()
+
+  await page.keyboard.press('p')
+  const perf = page.locator('.perf')
+  await expect(perf).toBeVisible()
+
+  // The figure itself is a SwiftShader number and means nothing here; what this
+  // checks is that the probe is wired to the renderer at all, which the draw
+  // call count proves — it can only be non-zero if the sample came from
+  // `gl.info` after a real frame.
+  await expect(perf).toContainText('fps')
+  // Polled rather than read once: a sample is published every 500 ms, and under
+  // software rendering the first one can land before a frame has been drawn.
+  await expect
+    .poll(
+      async () => {
+        const text = await perf.locator('.perf-stats dd').nth(1).textContent()
+        return Number((text ?? '0').replace(/[^0-9]/g, ''))
+      },
+      { timeout: 20_000, message: 'draw calls in the readout' },
+    )
+    .toBeGreaterThan(0)
+
+  await page.keyboard.press('p')
+  await expect(perf).toBeHidden()
+})
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 test('stays inside its render budget', async ({ page }) => {

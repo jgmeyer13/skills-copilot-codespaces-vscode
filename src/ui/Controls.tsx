@@ -7,11 +7,13 @@
  * makes a bug in this system reportable.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { TICK_RATE } from '../sim/state.ts'
 import { parseSeed } from '../sim/rng.ts'
 import { sendCommand, useStore } from '../state/store.ts'
 import { useDismiss, useFocusTrap } from './primitives.tsx'
+import { compact, int } from './format.ts'
+import { ignorePerf, perfGrade, perfSnapshot, subscribePerf } from './perf.ts'
 
 const SPEEDS = [
   { label: '1×', value: TICK_RATE },
@@ -216,6 +218,7 @@ const SHORTCUTS: [string, string][] = [
   ['1 · 2 · 3', 'Set speed to 1×, 5× or 20×'],
   ['R', 'Reset the camera to the site view'],
   ['D', 'Start or stop the demo tour'],
+  ['P', 'Show the frame-rate readout'],
   ['[  ·  ]', 'Previous or next site'],
   ['A', 'Focus the most severe open alert'],
   ['Click Site/Dock/Floor', 'Switch camera view'],
@@ -254,6 +257,52 @@ export function ShortcutSheet(): React.ReactElement | null {
           ))}
         </dl>
       </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The frame-rate readout. Off by default, because a number that only matters
+ * while you are tuning something does not belong in the composition the rest of
+ * the time. P toggles it; `?perf=1` starts with it open.
+ *
+ * The render loop publishes a sample twice a second and this subscribes to it
+ * through `useSyncExternalStore`, so the readout costs two renders a second
+ * while open and nothing at all while closed.
+ */
+export function PerfBadge(): React.ReactElement | null {
+  const open = useStore((s) => s.perfOpen)
+  // Closed means subscribe to nothing, so a hidden readout cannot cause a
+  // render twice a second for the rest of the session.
+  const sample = useSyncExternalStore(open ? subscribePerf : ignorePerf, perfSnapshot)
+
+  if (!open) return null
+
+  return (
+    <div className="perf" role="status" aria-label="Render performance">
+      <span className={`perf-fps is-${perfGrade(sample.fps)}`}>
+        <b className="mono">{sample.fps || '—'}</b> fps
+      </span>
+      <dl className="perf-stats">
+        <div>
+          <dt>frame</dt>
+          <dd className="mono">{sample.frameMs ? `${sample.frameMs} ms` : '—'}</dd>
+        </div>
+        <div>
+          <dt>calls</dt>
+          <dd className="mono">{int(sample.calls)}</dd>
+        </div>
+        <div>
+          <dt>tris</dt>
+          <dd className="mono">{compact(sample.triangles)}</dd>
+        </div>
+        <div>
+          <dt>dpr</dt>
+          <dd className="mono">{sample.dpr.toFixed(2)}</dd>
+        </div>
+      </dl>
     </div>
   )
 }

@@ -40,6 +40,7 @@
 .kpi,
 .transport,
 .camera-controls,
+.perf,
 .inspector,
 .toast,
 .demo-caption { pointer-events: auto; }
@@ -88,12 +89,18 @@
 }
 
 /* Camera controls float at the top-right of the clear 3D window, where they
-   overlap neither the right rail nor the tables. */
+   overlap neither the right rail nor the tables. Like the inspector, this is a
+   child of .dashboard, whose padding box already clears the top safe area — so
+   `top` must not add that inset a second time. */
 .floating-camera {
   position: absolute;
   right: calc(var(--rail-w) + var(--s6));
-  top: calc(var(--topbar-h) + var(--s4) + env(safe-area-inset-top, 0px));
+  top: calc(var(--topbar-h) + var(--s4));
   z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--s3);
 }
 
 /* ── Panel ────────────────────────────────────────────────────────────────── */
@@ -910,6 +917,54 @@
   border-radius: var(--r-md);
   padding: var(--s2) var(--s3);
 }
+
+
+/* ── Frame-rate readout ───────────────────────────────────────────────────── */
+
+/*
+ * Off by default (P toggles it). Sits under the camera controls because that is
+ * where someone changing the view is already looking, and it is the view that
+ * moves the number.
+ */
+.perf {
+  background: var(--glass-strong);
+  backdrop-filter: blur(16px) saturate(135%);
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-panel);
+  padding: var(--s3) var(--s3) var(--s2);
+  min-width: 148px;
+}
+
+.perf-fps {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: var(--fs-small);
+  color: var(--text-2);
+  letter-spacing: 0.02em;
+}
+.perf-fps b {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  line-height: 1;
+}
+.perf-fps.is-good b { color: var(--ok); }
+.perf-fps.is-fair b { color: var(--warn); }
+.perf-fps.is-poor b { color: var(--critical); }
+
+.perf-stats {
+  margin: var(--s2) 0 0;
+  padding: var(--s2) 0 0;
+  border-top: 1px solid var(--hairline-soft);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px var(--s3);
+}
+.perf-stats > div { display: flex; justify-content: space-between; gap: var(--s2); }
+.perf-stats dt { font-size: var(--fs-micro); color: var(--text-3); }
+.perf-stats dd { margin: 0; font-size: var(--fs-micro); color: var(--text-2); }
 
 /* ── Inspector ────────────────────────────────────────────────────────────── */
 

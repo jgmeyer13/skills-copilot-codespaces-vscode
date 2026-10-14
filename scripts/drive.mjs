@@ -178,6 +178,19 @@ await step('shortcut sheet', async () => {
   return `${n} shortcuts listed`
 })
 
+await step('frame-rate readout', async () => {
+  await page.keyboard.press('p')
+  await page.waitForSelector('.perf', { timeout: 10_000 })
+  await page.waitForTimeout(2500)
+  const fps = (await page.locator('.perf-fps').textContent()).trim().replace(/\s+/g, ' ')
+  const stats = await page.locator('.perf-stats dd').allTextContents()
+  const calls = Number(stats[1]?.replace(/[^0-9]/g, '') ?? '0')
+  if (!(calls > 0)) throw new Error(`readout shows ${calls} draw calls`)
+  await page.keyboard.press('p')
+  if (await page.locator('.perf').count()) throw new Error('readout did not close')
+  return `${fps} · ${stats.join(' · ')}`
+})
+
 await step('reset with a seed', async () => {
   await page.locator('.transport-seed').click()
   await page.locator('#seed-input').fill('4242')

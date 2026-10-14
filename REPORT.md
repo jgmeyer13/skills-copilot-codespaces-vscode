@@ -271,7 +271,31 @@ and picking pallets off the instanced mesh rather than through sixty invisible
 proxy boxes; before that it was 229 calls. The architecture is right for 60 fps
 (instancing, merged static geometry, ~8 materials, one shadow-casting light,
 adaptive DPR, zero React renders per frame), but **I have not seen it run at 60
-fps and cannot claim that I have.** Someone should open it on a real laptop.
+fps and cannot claim that I have.**
+
+So the app measures itself instead of taking my word for it: press **P** and it
+reports live fps, milliseconds per frame, draw calls, triangles and the device
+pixel ratio the adaptive loop has settled on. The sampler counts frames inside
+the render loop — the only honest place to count them — and publishes twice a
+second through an external store, so reading the number costs two renders a
+second while the readout is open and nothing at all while it is closed. In this
+container it reports 1–2 fps, which is the correct answer for software
+rendering and exactly why the figure had to come from the reader's machine
+rather than mine.
+
+**CI is written but has never run.** `.github/workflows/ci.yml` typechecks,
+lints, runs the unit suite and runs Playwright on a GitHub runner, and as far as
+I can read it, it is correct — but I cannot tell you it passes, because GitHub
+has never executed a line of it. Every run it has created for this repository —
+eight, across four commits and both `push` and `pull_request` — failed two or
+three seconds in with no runner assigned, no steps and a 404 for its logs. That
+is an account-level Actions condition rather than anything the workflow can fix,
+and the token available here gets `403 Resource not accessible by integration` on
+`rerun-failed-jobs`, so I could not even re-run one to confirm. Everything
+claimed in this report was verified in this container by hand. One portability
+defect did fall out of looking: the Playwright config hard-coded this container's
+Chromium path, which would have failed on a GitHub runner before the first test,
+and it now only sets `executablePath` when that binary exists.
 
 **The aurora is mostly skylight.** The curtains hang in the sky, and the default
 camera is a steep isometric that contains no sky at all — the top of the frame
@@ -364,6 +388,14 @@ looked past it until I made myself write it down.
 transfer rate and the fleet sizes were tuned until the behaviour looked right,
 not derived from anything. They are documented as tuned rather than dressed up as
 physics, but a domain expert would find them naive.
+
+*I still cannot tell you it holds 60 fps.* I gated on hardware-independent
+proxies, which is the right thing to do from a container with no GPU, and then
+late in the build I put the measurement into the app so the number can come from
+your machine instead of mine. That is the honest resolution available here, but
+it is a burden moved onto the reader rather than a measurement I made, and it
+arrived after everything else was finished rather than early enough to have
+changed any decision.
 
 *The test suite is slow.* The full unit run takes minutes because several tests
 simulate a whole day. I trimmed the worst of it, but a proper build would

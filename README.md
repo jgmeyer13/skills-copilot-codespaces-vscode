@@ -80,7 +80,7 @@ Server health: <http://127.0.0.1:8787/health>
 | `PORT` `SEED` `EMIT_HZ` | `8787` `20261014` `20` | Server-side equivalents |
 
 URL overrides work too, which is handy for bug reports and screenshots:
-`?seed=4242`, `?source=remote`, `?demo=1`.
+`?seed=4242`, `?source=remote`, `?demo=1`, `?perf=1`.
 
 ---
 
@@ -98,6 +98,7 @@ URL overrides work too, which is handy for bug reports and screenshots:
 | **Camera views** | **Site**, **Dock**, **Floor** buttons — the Floor view is the one that shows the racking being worked |
 | **Reset camera** | <kbd>R</kbd>, back to the Site view |
 | **Demo tour** | <kbd>D</kbd> |
+| **Frame rate** | <kbd>P</kbd> — fps, ms/frame, draw calls, triangles, DPR |
 | **All shortcuts** | <kbd>?</kbd> |
 
 The UI is fully keyboard navigable and honours `prefers-reduced-motion`, which

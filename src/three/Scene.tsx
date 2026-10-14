@@ -18,6 +18,7 @@ import { StaticWorld } from './StaticWorld.tsx'
 import { ActivePallets, AlertPins, DockDoors, Forklifts, RackedPallets, SelectionMarker, Trucks } from './LiveLayer.tsx'
 import { Rig } from './Rig.tsx'
 import { PickLayer } from './PickLayer.tsx'
+import { PerfProbe } from './PerfProbe.tsx'
 import { registerRenderer } from '../ui/debugBridge.ts'
 
 export function Scene(): React.ReactElement {
@@ -98,6 +99,7 @@ function SceneBody({ layout, reducedMotion }: { layout: SiteLayout; reducedMotio
 
       <Precipitation centre={centre} reducedMotion={reducedMotion} />
       <Rig layout={layout} />
+      <PerfProbe />
     </>
   )
 }

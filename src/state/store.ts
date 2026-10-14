@@ -117,6 +117,7 @@ interface StoreState {
 
   // Presentation
   reducedMotion: boolean
+  perfOpen: boolean
   demoMode: boolean
   demoCaption: string
   toasts: Toast[]
@@ -133,6 +134,7 @@ interface StoreState {
   setOpsTab: (tab: OpsTab) => void
   setInspectorOpen: (open: boolean) => void
   setReducedMotion: (value: boolean) => void
+  setPerfOpen: (value: boolean) => void
   setDemoMode: (value: boolean) => void
   setDemoCaption: (caption: string) => void
   pushToast: (toast: Omit<Toast, 'id'>) => void
@@ -160,6 +162,7 @@ export const useStore = create<StoreState>((set) => ({
   inspectorOpen: false,
 
   reducedMotion: false,
+  perfOpen: false,
   demoMode: false,
   demoCaption: '',
   toasts: [],
@@ -180,6 +183,7 @@ export const useStore = create<StoreState>((set) => ({
   setOpsTab: (tab) => set({ opsTab: tab }),
   setInspectorOpen: (open) => set({ inspectorOpen: open }),
   setReducedMotion: (value) => set({ reducedMotion: value }),
+  setPerfOpen: (value) => set({ perfOpen: value }),
   setDemoMode: (value) => set({ demoMode: value, demoCaption: value ? '' : '' }),
   setDemoCaption: (caption) => set({ demoCaption: caption }),
   pushToast: (toast) =>
