@@ -8,3 +8,13 @@ playwright-report/
 *.local
 .DS_Store
 *.log
+
+# Development iteration screenshots; only the curated set below is tracked.
+shots/*
+!shots/view-site.png
+!shots/view-dock.png
+!shots/view-floor.png
+!shots/night.png
+!shots/pins.png
+!shots/tablet-site.png
+!shots/drive-final.png

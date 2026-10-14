@@ -22,6 +22,7 @@ import '../styles/dashboard.css'
 
 export function App(): React.ReactElement {
   const statics = useStore((s) => s.statics)
+  const paletteOpen = useStore((s) => s.paletteOpen)
   const status = useStore((s) => s.status)
   const statusDetail = useStore((s) => s.statusDetail)
   const setReducedMotion = useStore((s) => s.setReducedMotion)
@@ -96,7 +97,7 @@ export function App(): React.ReactElement {
       </div>
 
       <Inspector />
-      <CommandPalette />
+      {paletteOpen && <CommandPalette />}
       <ShortcutSheet />
       <Toasts />
       <DemoTour />

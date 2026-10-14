@@ -34,12 +34,15 @@ const STEPS: Step[] = [
   {
     hold: 7000,
     caption: 'Keflavík Cold Port — fresh catch inbound, pharma on the North Atlantic rotation.',
+    // The tour narrates Keflavík first, so it starts by going there rather than
+    // describing it over whichever site the viewer happened to be looking at.
+    command: (sites) => ({ type: 'setActiveSite', siteId: sites[0] ?? '' }),
     focus: (sites) => ({ kind: 'site', id: sites[0] ?? '', siteId: sites[0] ?? '' }),
     speed: TICK_RATE,
   },
   {
     hold: 9000,
-    caption: 'Eight dock doors, each allocated to a thermal zone. Colour tells you what a bay is for.',
+    caption: 'Every dock door is allocated to a thermal zone. The colour tells you what a bay is for.',
     focus: (sites, pick) => {
       const site = sites[0] ?? ''
       const bay = pick.bay(site)

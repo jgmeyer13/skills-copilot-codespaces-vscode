@@ -26,8 +26,16 @@ interface Result {
   score: number
 }
 
+/**
+ * Mounted only while open (App gates it), which is what makes the empty query
+ * and zero cursor below correct on every open with no reset effect at all.
+ *
+ * The previous version reset them inside a `requestAnimationFrame`. On a machine
+ * rendering a frame every second that callback lands *after* the user has
+ * started typing and wipes their first keystrokes — searching "Trondheim" and
+ * pressing Enter did nothing. Unmounting is both simpler and race-free.
+ */
 export function CommandPalette(): React.ReactElement | null {
-  const open = useStore((s) => s.paletteOpen)
   const setOpen = useStore((s) => s.setPaletteOpen)
   const snapshot = useStore((s) => s.snapshot)
   const statics = useStore((s) => s.statics)
@@ -37,20 +45,14 @@ export function CommandPalette(): React.ReactElement | null {
   const [cursor, setCursor] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
-  const trapRef = useFocusTrap(open)
+  const trapRef = useFocusTrap(true)
 
+  // Focus still waits a frame, because the input has to exist first. Losing a
+  // keystroke to that is impossible — the field is already correct and empty.
   useEffect(() => {
-    if (!open) return
-    // Deferred to the next frame: the input needs to exist before it can take
-    // focus, and resetting here rather than in the effect body avoids a
-    // cascading render on open.
-    const id = requestAnimationFrame(() => {
-      setQuery('')
-      setCursor(0)
-      inputRef.current?.focus()
-    })
+    const id = requestAnimationFrame(() => inputRef.current?.focus())
     return () => cancelAnimationFrame(id)
-  }, [open])
+  }, [])
 
   const results = useMemo(() => search(query, snapshot, statics), [query, snapshot, statics])
   // Clamp during render rather than correcting it in an effect: the result list
@@ -59,12 +61,9 @@ export function CommandPalette(): React.ReactElement | null {
 
   // Keep the active row in view when navigating by keyboard.
   useEffect(() => {
-    if (!open) return
     const node = listRef.current?.querySelectorAll('li')[active]
     node?.scrollIntoView({ block: 'nearest' })
-  }, [active, open])
-
-  if (!open) return null
+  }, [active])
 
   const choose = (result: Result | undefined): void => {
     if (!result) return

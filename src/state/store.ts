@@ -81,7 +81,7 @@ export function liveSite(snapshot: WorldSnapshot | null): SiteSnapshot | null {
 // Tier 2 — React-visible state
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type OpsTab = 'docks' | 'forklifts' | 'trucks'
+export type OpsTab = 'docks' | 'forklifts' | 'trucks' | 'shipments'
 
 export interface FocusRequest {
   ref: EntityRef

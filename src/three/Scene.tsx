@@ -15,7 +15,7 @@ import type { SiteLayout } from '../sim/types.ts'
 import { useStore } from '../state/store.ts'
 import { Aurora, Lighting, Precipitation, Sky } from './Atmosphere.tsx'
 import { StaticWorld } from './StaticWorld.tsx'
-import { ActivePallets, DockDoors, Forklifts, RackedPallets, SelectionMarker, Trucks } from './LiveLayer.tsx'
+import { ActivePallets, AlertPins, DockDoors, Forklifts, RackedPallets, SelectionMarker, Trucks } from './LiveLayer.tsx'
 import { Rig } from './Rig.tsx'
 import { PickLayer } from './PickLayer.tsx'
 import { registerRenderer } from '../ui/debugBridge.ts'
@@ -92,6 +92,7 @@ function SceneBody({ layout, reducedMotion }: { layout: SiteLayout; reducedMotio
       <Trucks siteId={layout.id} />
       <Forklifts siteId={layout.id} />
       <ActivePallets siteId={layout.id} />
+      <AlertPins siteId={layout.id} layout={layout} />
       <SelectionMarker siteId={layout.id} layout={layout} />
       <PickLayer layout={layout} />
 

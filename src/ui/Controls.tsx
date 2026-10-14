@@ -135,18 +135,37 @@ export function SimControls(): React.ReactElement | null {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+const VIEWS: { id: 'site' | 'dock' | 'floor'; label: string; hint: string }[] = [
+  { id: 'site', label: 'Site', hint: 'The whole operation' },
+  { id: 'dock', label: 'Dock', hint: 'Across the dock face' },
+  { id: 'floor', label: 'Floor', hint: 'Inside, down an aisle' },
+]
+
 export function CameraControls(): React.ReactElement {
-  const fire = (): void => {
-    window.dispatchEvent(new CustomEvent('kelvin:camera-reset'))
+  const [view, setView] = useState<'site' | 'dock' | 'floor'>('site')
+
+  const go = (preset: 'site' | 'dock' | 'floor'): void => {
+    setView(preset)
+    window.dispatchEvent(new CustomEvent('kelvin:camera-preset', { detail: preset }))
   }
+
   return (
     <div className="camera-controls" role="group" aria-label="Camera">
-      <button type="button" className="icon-button camera-button" onClick={fire} title="Reset camera (R)" aria-label="Reset camera">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-          <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.9 0 3.6 1 4.6 2.5" strokeLinecap="round" />
-          <path d="M13.2 2.2v3.2H10" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
+      <div className="view-group" role="radiogroup" aria-label="Camera view">
+        {VIEWS.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            role="radio"
+            aria-checked={view === option.id}
+            title={option.hint}
+            className={`view-button ${view === option.id ? 'view-active' : ''}`}
+            onClick={() => go(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
       <div className="camera-hint">
         <span>Drag to orbit</span>
         <span>Scroll to zoom</span>
@@ -195,10 +214,11 @@ const SHORTCUTS: [string, string][] = [
   ['/', 'Jump straight to search'],
   ['Space', 'Pause or resume the simulation'],
   ['1 · 2 · 3', 'Set speed to 1×, 5× or 20×'],
-  ['R', 'Reset the camera'],
+  ['R', 'Reset the camera to the site view'],
   ['D', 'Start or stop the demo tour'],
   ['[  ·  ]', 'Previous or next site'],
   ['A', 'Focus the most severe open alert'],
+  ['Click Site/Dock/Floor', 'Switch camera view'],
   ['Esc', 'Close panels and clear selection'],
   ['?', 'Show this sheet'],
 ]

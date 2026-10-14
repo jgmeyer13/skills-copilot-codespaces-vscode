@@ -81,8 +81,10 @@ URL overrides work too, which is handy for bug reports and screenshots:
 | **Fly to a problem** | Click an alert — the camera goes there |
 | **Search everything** | <kbd>⌘K</kbd> / <kbd>Ctrl K</kbd>, across all three sites |
 | **Pause / speed** | <kbd>Space</kbd>, <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> for 1× 5× 20× |
+| **Jump to worst alert** | <kbd>A</kbd> |
 | **Switch site** | <kbd>[</kbd> <kbd>]</kbd>, or the switcher in the top bar |
-| **Reset camera** | <kbd>R</kbd> |
+| **Camera views** | **Site**, **Dock**, **Floor** buttons — the Floor view is the one that shows the racking being worked |
+| **Reset camera** | <kbd>R</kbd>, back to the Site view |
 | **Demo tour** | <kbd>D</kbd> |
 | **All shortcuts** | <kbd>?</kbd> |
 

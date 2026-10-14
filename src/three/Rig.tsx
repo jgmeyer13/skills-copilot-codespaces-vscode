@@ -35,31 +35,57 @@ export interface CameraRigHandle {
  * building into the clear window above the bottom panels. Aiming above the
  * building does the opposite and pushes it behind them.
  */
-const CAMERA = {
-  /** Multiples of the footprint diagonal. */
-  distance: 1.9,
-  /** Elevation above the horizon. Shallow enough to see the dock face, steep
-   *  enough to see into the open-top building. */
-  elevation: (33 * Math.PI) / 180,
-  /** Bearing round from the dock face, so the yard and one flank are both in view. */
-  azimuth: (45 * Math.PI) / 180,
-  /** Aim point drop, as a fraction of the diagonal. */
-  aimDrop: 0.11,
-} as const
+/**
+ * Camera presets.
+ *
+ * One establishing shot is not enough. The site view frames the whole operation
+ * but reduces a forklift to a few pixels; the dock view is where the reversing
+ * manoeuvre reads; the floor view is the only way to actually watch the racking
+ * being worked. All three are derived from the site's footprint so they frame
+ * identically whether a site has six doors or ten.
+ */
+export type CameraPreset = 'site' | 'dock' | 'floor'
 
-export function defaultCamera(layout: SiteLayout): { position: THREE.Vector3; target: THREE.Vector3 } {
+interface PresetSpec {
+  /** Distance as a multiple of the footprint diagonal. */
+  distance: number
+  /** Elevation above the horizon, radians. */
+  elevation: number
+  /** Bearing round from the dock face, radians. */
+  azimuth: number
+  /** Aim point, as fractions of the building dimensions. */
+  aim: { x: number; y: number; z: number }
+}
+
+const rad = (deg: number): number => (deg * Math.PI) / 180
+
+const PRESETS: Record<CameraPreset, PresetSpec> = {
+  // The whole site, aimed below ground so the building rides above the bottom panels.
+  site: { distance: 1.95, elevation: rad(29), azimuth: rad(45), aim: { x: 0.5, y: -0.09, z: 0.42 } },
+  // Across the dock face, low enough to watch a trailer come onto the bay.
+  dock: { distance: 0.62, elevation: rad(16), azimuth: rad(62), aim: { x: 0.5, y: 0.03, z: -0.12 } },
+  // Inside, down an aisle. The only view where the floor operation is legible.
+  floor: { distance: 0.66, elevation: rad(27), azimuth: rad(30), aim: { x: 0.45, y: 0.02, z: 0.44 } },
+}
+
+function framing(layout: SiteLayout, preset: CameraPreset): { position: THREE.Vector3; target: THREE.Vector3 } {
   const { width, depth } = layout.building
+  const spec = PRESETS[preset]
   const diagonal = Math.hypot(width, depth)
-  const distance = diagonal * CAMERA.distance
-  const horizontal = distance * Math.cos(CAMERA.elevation)
+  const distance = diagonal * spec.distance
+  const horizontal = distance * Math.cos(spec.elevation)
 
-  const target = new THREE.Vector3(width * 0.5, -diagonal * CAMERA.aimDrop, depth * 0.4)
+  const target = new THREE.Vector3(width * spec.aim.x, diagonal * spec.aim.y, depth * spec.aim.z)
   const position = new THREE.Vector3(
-    target.x + horizontal * Math.cos(CAMERA.azimuth),
-    target.y + distance * Math.sin(CAMERA.elevation),
-    target.z - horizontal * Math.sin(CAMERA.azimuth),
+    target.x + horizontal * Math.cos(spec.azimuth),
+    target.y + distance * Math.sin(spec.elevation),
+    target.z - horizontal * Math.sin(spec.azimuth),
   )
   return { position, target }
+}
+
+export function defaultCamera(layout: SiteLayout): { position: THREE.Vector3; target: THREE.Vector3 } {
+  return framing(layout, 'site')
 }
 
 export function Rig({ layout }: { layout: SiteLayout }): React.ReactElement {
@@ -90,14 +116,17 @@ export function Rig({ layout }: { layout: SiteLayout }): React.ReactElement {
   })
 
   const beginFlight = useCallback(
-    (targetPoint: THREE.Vector3, distance: number) => {
+    (targetPoint: THREE.Vector3, distance: number, exactPosition?: THREE.Vector3) => {
       const controls = controlsRef.current
       if (!controls) return
 
-      // Approach from the camera's current side so the world doesn't swing
-      // around the viewer — a fly-to should feel like walking over, not cutting.
-      const offset = camera.position.clone().sub(controls.target)
-      offset.y = Math.max(offset.y, distance * 0.42)
+      // A preset supplies its own bearing. Everything else approaches from the
+      // camera's current side, so a fly-to feels like walking over rather than
+      // cutting, and the world doesn't swing around the viewer.
+      const offset = exactPosition
+        ? exactPosition.clone().sub(targetPoint)
+        : camera.position.clone().sub(controls.target)
+      if (!exactPosition) offset.y = Math.max(offset.y, distance * 0.42)
       offset.setLength(distance)
 
       if (reducedMotion) {
@@ -117,9 +146,13 @@ export function Rig({ layout }: { layout: SiteLayout }): React.ReactElement {
     [camera, reducedMotion],
   )
 
-  const reset = useCallback(() => {
-    beginFlight(home.target.clone(), home.position.distanceTo(home.target))
-  }, [beginFlight, home])
+  const goTo = useCallback(
+    (preset: CameraPreset) => {
+      const shot = framing(layout, preset)
+      beginFlight(shot.target.clone(), shot.position.distanceTo(shot.target), shot.position.clone())
+    },
+    [beginFlight, layout],
+  )
 
   // Respond to focus requests from alerts, search results and the inspector.
   useEffect(() => {
@@ -139,12 +172,14 @@ export function Rig({ layout }: { layout: SiteLayout }): React.ReactElement {
     clearFocus()
   }, [focus, layout, beginFlight, clearFocus])
 
-  // Expose reset and home on the window-free event bus the toolbar uses.
   useEffect(() => {
-    const onReset = (): void => reset()
-    window.addEventListener('kelvin:camera-reset', onReset)
-    return () => window.removeEventListener('kelvin:camera-reset', onReset)
-  }, [reset])
+    const onPreset = (event: Event): void => {
+      const preset = (event as CustomEvent<CameraPreset>).detail ?? 'site'
+      goTo(preset)
+    }
+    window.addEventListener('kelvin:camera-preset', onPreset)
+    return () => window.removeEventListener('kelvin:camera-preset', onPreset)
+  }, [goTo])
 
   useEffect(() => {
     const controls = controlsRef.current

@@ -43,15 +43,25 @@ test('boots with no console errors and renders the dashboard', async ({ page }) 
   expect(errors, `console errors:\n${errors.join('\n')}`).toEqual([])
 })
 
-test('the simulation is live: clock and KPIs advance', async ({ page }) => {
+test('the simulation is live: the engine advances', async ({ page }) => {
   await boot(page)
 
-  const clock = page.locator('.clock-time')
-  const first = await clock.textContent()
+  // Asserted on the tick counter rather than the rendered clock. The engine
+  // clamps each frame's delta to 250ms so a backgrounded tab cannot simulate
+  // minutes in one blocking burst; under SwiftShader, which renders at about
+  // one frame a second, that clamp means simulated time advances at roughly a
+  // quarter rate and the HH:MM display may not tick over inside a short window.
+  // On real hardware frames are 16ms and the clamp never engages.
+  const tickOf = async (): Promise<number> =>
+    (await page.evaluate(() => {
+      const w = window as unknown as { __kelvin?: { snapshot?: () => { tick: number } | null } }
+      return w.__kelvin?.snapshot?.()?.tick ?? -1
+    })) as number
 
-  await page.waitForTimeout(6000)
-  const second = await clock.textContent()
-  expect(second).not.toBe(first)
+  const first = await tickOf()
+  expect(first).toBeGreaterThan(0)
+  await page.waitForTimeout(5000)
+  expect(await tickOf()).toBeGreaterThan(first)
 })
 
 test('the 3D scene animates', async ({ page }) => {
@@ -64,30 +74,48 @@ test('the 3D scene animates', async ({ page }) => {
   expect(Buffer.compare(a, b)).not.toBe(0)
 })
 
-test('pause stops the clock, resume restarts it', async ({ page }) => {
+test('pause stops the engine, resume restarts it', async ({ page }) => {
   await boot(page)
 
-  await page.locator('.transport-play').click()
-  await page.waitForTimeout(600)
-  const paused = await page.locator('.clock-time').textContent()
-  await page.waitForTimeout(3000)
-  expect(await page.locator('.clock-time').textContent()).toBe(paused)
+  const tickOf = async (): Promise<number> =>
+    (await page.evaluate(() => {
+      const w = window as unknown as { __kelvin?: { snapshot?: () => { tick: number } | null } }
+      return w.__kelvin?.snapshot?.()?.tick ?? -1
+    })) as number
 
   await page.locator('.transport-play').click()
-  await page.waitForTimeout(4000)
-  expect(await page.locator('.clock-time').textContent()).not.toBe(paused)
+  await page.waitForTimeout(900)
+  const paused = await tickOf()
+  await page.waitForTimeout(3000)
+  expect(await tickOf(), 'the engine advanced while paused').toBe(paused)
+
+  await page.locator('.transport-play').click()
+  await page.waitForTimeout(3000)
+  expect(await tickOf(), 'the engine did not resume').toBeGreaterThan(paused)
 })
 
 test('speed controls change the rate of simulated time', async ({ page }) => {
   await boot(page)
 
+  const tickOf = async (): Promise<number> =>
+    (await page.evaluate(() => {
+      const w = window as unknown as { __kelvin?: { snapshot?: () => { tick: number } | null } }
+      return w.__kelvin?.snapshot?.()?.tick ?? -1
+    })) as number
+
+  await page.getByRole('radio', { name: '1×' }).click()
+  const slowStart = await tickOf()
+  await page.waitForTimeout(4000)
+  const slowTicks = (await tickOf()) - slowStart
+
   await page.getByRole('radio', { name: '20×' }).click()
   await expect(page.getByRole('radio', { name: '20×' })).toHaveAttribute('aria-checked', 'true')
+  const fastStart = await tickOf()
+  await page.waitForTimeout(4000)
+  const fastTicks = (await tickOf()) - fastStart
 
-  const before = await page.locator('.clock-time').textContent()
-  await page.waitForTimeout(3000)
-  const after = await page.locator('.clock-time').textContent()
-  expect(after).not.toBe(before)
+  expect(slowTicks).toBeGreaterThan(0)
+  expect(fastTicks, `20x produced ${fastTicks} ticks, 1x produced ${slowTicks}`).toBeGreaterThan(slowTicks)
 })
 
 test('the command palette searches across sites and flies the camera', async ({ page }) => {

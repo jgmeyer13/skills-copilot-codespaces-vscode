@@ -264,9 +264,9 @@ interface AuroraCurtain {
 }
 
 const CURTAINS: AuroraCurtain[] = [
-  { position: [40, 150, 330], rotation: [0, 0, 0], scale: [1, 1, 1], low: '#3df5a0', high: '#6aa8ff', speed: 1 },
-  { position: [-80, 190, 280], rotation: [0, 0.35, 0.1], scale: [0.8, 1.25, 1], low: '#2fe59a', high: '#a98cff', speed: 0.72 },
-  { position: [160, 170, 380], rotation: [0, -0.28, -0.08], scale: [0.95, 0.9, 1], low: '#54f0bb', high: '#5e9cff', speed: 1.35 },
+  { position: [40, 86, 560], rotation: [0, 0, 0], scale: [1.3, 0.72, 1], low: '#3df5a0', high: '#6aa8ff', speed: 1 },
+  { position: [-150, 104, 500], rotation: [0, 0.35, 0.1], scale: [1.05, 0.9, 1], low: '#2fe59a', high: '#a98cff', speed: 0.72 },
+  { position: [240, 78, 620], rotation: [0, -0.28, -0.08], scale: [1.2, 0.66, 1], low: '#54f0bb', high: '#5e9cff', speed: 1.35 },
 ]
 
 export function Aurora({ reducedMotion }: { reducedMotion: boolean }): React.ReactElement | null {
@@ -342,6 +342,10 @@ export function Aurora({ reducedMotion }: { reducedMotion: boolean }): React.Rea
 // Lighting rig
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** The colour a strong aurora casts onto a landscape. */
+const AURORA_SKY = new THREE.Color('#2fe59a')
+const AURORA_GROUND = new THREE.Color('#1d7f68')
+
 export function Lighting({ siteWidth, siteDepth }: { siteWidth: number; siteDepth: number }): React.ReactElement {
   const sunRef = useRef<THREE.DirectionalLight>(null)
   const ambientRef = useRef<THREE.AmbientLight>(null)
@@ -379,23 +383,41 @@ export function Lighting({ siteWidth, siteDepth }: { siteWidth: number; siteDept
       const warmth = THREE.MathUtils.clamp(1 - sunElevation * 3.2, 0, 1)
       sunColor.setRGB(1, 0.93 - warmth * 0.18, 0.84 - warmth * 0.3)
       sunRef.current.color.copy(sunColor)
-      sunRef.current.intensity = (0.3 + daylight * 2.5) * (1 - overcast * 0.4)
+      sunRef.current.intensity = (0.05 + daylight * 2.6) * (1 - overcast * 0.4)
     }
 
     if (ambientRef.current) {
-      ambientRef.current.intensity = 0.62 + daylight * 0.78 + overcast * 0.25
+      ambientRef.current.intensity = 0.2 + daylight * 1.15 + overcast * 0.2
     }
     if (hemiRef.current) {
       // Sky light goes deep blue at night, which is what makes the yard lamps read.
-      skyColor.setHSL(0.58, 0.45 - daylight * 0.2, 0.16 + daylight * 0.62)
-      groundColor.setHSL(0.6, 0.12, 0.1 + daylight * 0.3)
+      skyColor.setHSL(0.6, 0.5 - daylight * 0.25, 0.07 + daylight * 0.7)
+      groundColor.setHSL(0.62, 0.2, 0.04 + daylight * 0.34)
+
+      /*
+       * Aurora on the ground.
+       *
+       * The curtains themselves hang in the sky, and this scene's default view
+       * is a steep isometric that contains no sky at all — so on their own they
+       * would only ever be seen by someone who orbited the camera up. What a
+       * strong aurora actually does to a landscape is wash it green, which is
+       * how every photograph of one looks, so it is modelled here as skylight
+       * rather than left as scenery nobody sees.
+       */
+      const auroraStrength = THREE.MathUtils.smoothstep(sunElevation, -0.03, -0.26) * (1 - overcast * 0.85)
+      if (auroraStrength > 0.001) {
+        skyColor.lerp(AURORA_SKY, auroraStrength * 0.55)
+        groundColor.lerp(AURORA_GROUND, auroraStrength * 0.3)
+      }
+
       hemiRef.current.color.copy(skyColor)
       hemiRef.current.groundColor.copy(groundColor)
-      hemiRef.current.intensity = 0.7 + daylight * 0.75
+      hemiRef.current.intensity = 0.26 + daylight * 1.15 + auroraStrength * 0.26
     }
     if (fillRef.current) {
       // A cold fill from the opposite side keeps shadowed faces from going black.
-      fillRef.current.intensity = 0.18 + (1 - daylight) * 0.22
+      // A cold fill keeps shadowed faces off pure black at night.
+      fillRef.current.intensity = 0.1 + (1 - daylight) * 0.16
     }
   })
 

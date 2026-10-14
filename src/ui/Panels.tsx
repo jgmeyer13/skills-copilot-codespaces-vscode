@@ -498,6 +498,7 @@ export function OpsTable(): React.ReactElement | null {
   const layout = statics?.layouts.find((l) => l.id === site?.id)
   if (!site || !layout || !snapshot) return null
 
+  const nowMin = snapshot.clock.day * MIN_PER_DAY + snapshot.clock.minuteOfDay
   const activeTrucks = site.trucks.filter((t) => t.phase !== 'gone')
 
   return (
@@ -514,6 +515,7 @@ export function OpsTable(): React.ReactElement | null {
             { id: 'docks', label: 'Docks', count: site.metrics.baysTotal },
             { id: 'forklifts', label: 'Forklifts', count: site.forklifts.length },
             { id: 'trucks', label: 'Trucks', count: activeTrucks.length },
+            { id: 'shipments', label: 'Shipments', count: site.shipments.filter((sh) => sh.stage !== 'delivered' && sh.stage !== 'scrapped').length },
           ]}
         />
       }
@@ -522,6 +524,7 @@ export function OpsTable(): React.ReactElement | null {
       {tab === 'docks' && <DocksTable site={site} layout={layout} />}
       {tab === 'forklifts' && <ForkliftsTable site={site} />}
       {tab === 'trucks' && <TrucksTable site={site} />}
+      {tab === 'shipments' && <ShipmentsTable site={site} nowMin={nowMin} />}
     </Panel>
   )
 }
@@ -646,6 +649,69 @@ function TrucksTable({ site }: { site: SiteSnapshot }): React.ReactElement {
               <td className="mono">{degrees(truck.boxC, 1)}</td>
               <td className={`mono ${late ? 'text-warn' : ''}`}>
                 {late ? `${Math.round(truck.delayMin)} min late` : clock(truck.scheduledMin)}
+              </td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+}
+
+/**
+ * Shipments as a table.
+ *
+ * The big tracker panel is the hero view at desktop width, but it needs about
+ * 430px to lay out five stages legibly. This is the same information in a form
+ * that survives a narrow column — and it is the better view when you want to
+ * scan twelve shipments rather than study one.
+ */
+function ShipmentsTable({ site, nowMin }: { site: SiteSnapshot; nowMin: number }): React.ReactElement {
+  const focusOn = useFocus()
+  if (site.shipments.length === 0) return <Empty>No shipments on the book.</Empty>
+
+  return (
+    <table className="table">
+      <thead>
+        <tr>
+          <th scope="col">Shipment</th>
+          <th scope="col">Customer</th>
+          <th scope="col">Zone</th>
+          <th scope="col">Stage</th>
+          <th scope="col">Pallets</th>
+          <th scope="col">ETA</th>
+        </tr>
+      </thead>
+      <tbody>
+        {site.shipments.map((shipment: Shipment) => {
+          const late = shipment.etaMin > shipment.dueMin
+          const scrapped = shipment.stage === 'scrapped'
+          const target: EntityRef = shipment.truckId
+            ? { kind: 'truck', id: shipment.truckId, siteId: site.id }
+            : { kind: 'site', id: site.id, siteId: site.id }
+          return (
+            <tr
+              key={shipment.id}
+              tabIndex={0}
+              onClick={() => focusOn(target)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') focusOn(target)
+              }}
+            >
+              <th scope="row" className="mono">{shipment.id}</th>
+              <td className="truncate">{CUSTOMER_BY_ID[shipment.customerId]?.name ?? shipment.customerId}</td>
+              <td><ZoneChip zone={shipment.zone} label={ZONE_LABEL[shipment.zone] ?? shipment.zone} /></td>
+              <td>
+                <Badge
+                  tone={scrapped ? 'critical' : shipment.stage === 'delivered' ? 'ok' : 'accent'}
+                  dot={!scrapped && shipment.stage !== 'delivered'}
+                >
+                  {STAGE_LABEL[shipment.stage] ?? shipment.stage}
+                </Badge>
+              </td>
+              <td className="mono">{shipment.palletsReady}/{shipment.palletsTotal}</td>
+              <td className={`mono ${late && !scrapped ? 'text-warn' : ''}`}>
+                {scrapped ? '—' : relative(shipment.etaMin, nowMin)}
               </td>
             </tr>
           )

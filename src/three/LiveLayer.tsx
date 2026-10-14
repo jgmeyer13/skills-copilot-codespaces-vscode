@@ -17,10 +17,10 @@ import * as THREE from 'three'
 import type { Forklift, Pallet, SiteLayout, SiteSnapshot, Truck, WorldSnapshot } from '../sim/types.ts'
 import { DIMS, slotPosition } from '../sim/layout.ts'
 import { TRUCK } from '../sim/systems/traffic.ts'
-import { CARRIER_BY_ID } from '../sim/catalogue.ts'
+import { CARRIER_BY_ID, SKUS } from '../sim/catalogue.ts'
 import { interpolationAlpha, liveBus, useStore } from '../state/store.ts'
-import { PALETTE, ZONE_COLOR, paint as paintGeometry, solidMaterial } from './geometry/kit.ts'
-import { buildPallet } from './geometry/structures.ts'
+import { PALETTE, ZONE_COLOR, glowMaterial, paint as paintGeometry, solidMaterial } from './geometry/kit.ts'
+import { buildMapPin, buildPallet } from './geometry/structures.ts'
 import { buildForklift, buildTruck } from './geometry/vehicles.ts'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -329,6 +329,17 @@ export function Forklifts({ siteId }: { siteId: string }): React.ReactElement {
 export function RackedPallets({ layout }: { layout: SiteLayout }): React.ReactElement {
   const meshRef = useRef<THREE.InstancedMesh>(null)
   const previousSlots = useRef<number[]>([])
+  const select = useStore((s) => s.select)
+  /**
+   * Instance index → SKU id.
+   *
+   * Racked stock crosses the wire as an occupancy array of SKU indices rather
+   * than as pallet objects, so there is no individual pallet id to select here.
+   * Clicking racked stock therefore opens the *product* — which is the more
+   * useful answer anyway: "what is in this aisle" rather than "which of these
+   * eight hundred identical pallets did I hit".
+   */
+  const skuAt = useRef<string[]>([])
 
   const geometry = useMemo(() => buildPallet(), [])
   const material = useMemo(() => solidMaterial({ flat: true }), [])
@@ -411,9 +422,11 @@ export function RackedPallets({ layout }: { layout: SiteLayout }): React.ReactEl
         slotData.colors[i * 3 + 2] as number,
       )
       mesh.setColorAt(count, colour)
+      skuAt.current[count] = SKUS[slots[i] ?? -1]?.id ?? ''
       count++
     }
     mesh.count = count
+    skuAt.current.length = count
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
     mesh.computeBoundingSphere()
@@ -426,6 +439,14 @@ export function RackedPallets({ layout }: { layout: SiteLayout }): React.ReactEl
       castShadow
       receiveShadow
       frustumCulled={false}
+      onClick={(event) => {
+        const index = event.instanceId
+        if (index === undefined) return
+        const skuId = skuAt.current[index]
+        if (!skuId) return
+        event.stopPropagation()
+        select({ kind: 'sku', id: skuId, siteId: layout.id })
+      }}
     />
   )
 }
@@ -641,6 +662,86 @@ export function DockDoors({ layout }: { layout: SiteLayout }): React.ReactElemen
         frustumCulled={false}
       />
     </group>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Alert pins
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MAX_PINS = 14
+
+/**
+ * A floating pin over anything with an open alert at the active site.
+ *
+ * This is the other half of "clicking an alert flies the camera": without it the
+ * traffic runs one way only, and you can see a problem in the list but not in
+ * the world. Pins are tinted by severity and bob out of phase so a cluster reads
+ * as several problems rather than one.
+ */
+export function AlertPins({ siteId, layout }: { siteId: string; layout: SiteLayout }): React.ReactElement {
+  const meshRef = useRef<THREE.InstancedMesh>(null)
+  const geometry = useMemo(() => buildMapPin(), [])
+  const material = useMemo(() => glowMaterial(0.92), [])
+
+  useLayoutEffect(() => {
+    const g = geometry
+    const m = material
+    return () => {
+      g.dispose()
+      m.dispose()
+    }
+  }, [geometry, material])
+
+  useFrame((state) => {
+    const mesh = meshRef.current
+    const snapshot = liveBus.next
+    if (!mesh || !snapshot) return
+    const site = siteOf(snapshot, siteId)
+    if (!site) return
+
+    const dummy = new THREE.Object3D()
+    const colour = new THREE.Color()
+    let count = 0
+    const seen = new Set<string>()
+
+    for (const alert of snapshot.alerts) {
+      if (count >= MAX_PINS) break
+      if (alert.siteId !== siteId) continue
+      if (alert.severity === 'info') continue
+      // One pin per place, not one per alert: three alerts about the same bay
+      // should not stack three markers on top of each other.
+      const key = `${alert.focus.kind}:${alert.focus.id}`
+      if (seen.has(key)) continue
+
+      const position = resolveEntityPosition(site, layout, alert.focus.kind, alert.focus.id)
+      if (!position) continue
+      seen.add(key)
+
+      const bob = Math.sin(state.clock.elapsedTime * 1.7 + count * 1.3) * 0.45
+      dummy.position.set(position[0], position[1] + 4.2 + bob, position[2])
+      dummy.rotation.set(0, state.clock.elapsedTime * 0.5 + count, 0)
+      dummy.scale.setScalar(1)
+      dummy.updateMatrix()
+      mesh.setMatrixAt(count, dummy.matrix)
+      colour.set(alert.severity === 'critical' ? '#ff5c68' : '#f5a524')
+      mesh.setColorAt(count, colour)
+      count++
+    }
+
+    mesh.count = count
+    mesh.visible = count > 0
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  })
+
+  return (
+    <instancedMesh
+      ref={meshRef}
+      args={[geometry, material, MAX_PINS]}
+      frustumCulled={false}
+      renderOrder={10}
+    />
   )
 }
 

@@ -423,3 +423,30 @@ export function buildPallet(): THREE.BufferGeometry {
     box(1.12, 0.06, 0.96, { y: 0.74, color: '#aab4bf' }),
   ])
 }
+
+/**
+ * A map pin: a teardrop head over a tapered spike.
+ *
+ * Instanced above anything with an open alert, so a problem is visible from the
+ * camera's default distance without reading the dashboard. The head is drawn as
+ * a sphere flattened slightly on the vertical axis, which keeps the silhouette
+ * readable at the handful of pixels it usually occupies.
+ */
+export function buildMapPin(): THREE.BufferGeometry {
+  const head = new THREE.SphereGeometry(0.95, 10, 8)
+  head.scale(1, 1.08, 1)
+  head.translate(0, 2.9, 0)
+  paint(head, '#ffffff')
+
+  const spike = new THREE.ConeGeometry(0.62, 1.9, 10)
+  spike.rotateX(Math.PI)
+  spike.translate(0, 1.2, 0)
+  paint(spike, '#ffffff')
+
+  // A dark centre so the pin reads as a marker rather than a blob.
+  const eye = new THREE.SphereGeometry(0.4, 8, 6)
+  eye.translate(0, 2.95, 0.62)
+  paint(eye, '#0b1118')
+
+  return merge([head, spike, eye])
+}

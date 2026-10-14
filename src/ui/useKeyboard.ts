@@ -88,7 +88,7 @@ export function useKeyboard(): void {
 
         case 'r':
         case 'R':
-          window.dispatchEvent(new CustomEvent('kelvin:camera-reset'))
+          window.dispatchEvent(new CustomEvent('kelvin:camera-preset', { detail: 'site' }))
           break
 
         case 'd':

@@ -17,16 +17,17 @@ entirely client-side in simulated mode).
 | Asked for | State |
 |---|---|
 | Stylised low-poly world, built in code, no downloaded models or textures | Done. Every shape in `src/three/geometry/` is assembled from primitives |
+| Map pins | Done. A pin floats over anything with an open alert, tinted by severity |
 | Warehouse, dock doors, racking, pallets, yard, roads, landscaping | Done. Open-top "dollhouse" building so the racking and floor are visible |
 | Trucks that arrive, queue, reverse into bays, load/unload, leave | Done. The reverse is a scripted Bézier with trailer articulation |
 | Forklifts pathing between racks, staging and docks, carrying pallets | Done. A* over a 1 m nav grid with string-pulled waypoints |
-| Camera: orbit, zoom, reset, focus-on-click; selection opens details | Done |
+| Camera: orbit, zoom, reset, focus-on-click; selection opens details | Done, plus three derived presets — Site, Dock and Floor |
 | Day/night or weather cycle | Done, and load-bearing — see §2 |
 | Top bar: site switcher, global search, live clock, notifications, user menu | Done. ⌘K palette searches all three sites |
 | KPI tiles with live deltas | Done, plus a fourth the brief didn't ask for: chain integrity |
 | Site panel: status, capacity, bays, outbound, put-aways, inventory, fleet | Done, plus per-zone temperature and stock integrity |
 | Shipment tracker with live ETAs | Done |
-| Tabbed Docks / Forklifts / Trucks table | Done |
+| Tabbed Docks / Forklifts / Trucks table | Done, plus a Shipments tab |
 | Alerts for real events; clicking flies the camera | Done. Eight rule families |
 | Simulation controls: pause, 1×, 5×, 20×, reset with a seed | Done |
 | Deterministic, seedable, tick-based engine kept separate from the UI | Done. `src/sim` imports no React, three.js or DOM |
@@ -36,7 +37,7 @@ entirely client-side in simulated mode).
 | Documented data contract | `docs/DATA_CONTRACT.md` |
 | Keyboard accessible, respects reduced motion | Done |
 | Demo mode: automatic camera tour with events firing | Done. <kbd>D</kbd> or `?demo=1` |
-| Unit tests for the simulation | 60+ across determinism, systems and server |
+| Unit tests for the simulation | 73: 9 determinism, 58 systems, 6 server integration over a real socket |
 | Zero TS errors, zero console errors, clean lint | Yes |
 
 ---
@@ -171,8 +172,8 @@ valid implementation. The UI degrades by leaving a control inert, not by breakin
 
 ## 5. Bugs worth recording
 
-Four real defects, all found by tooling rather than by reading the code. I'm
-listing them because how they were caught is the useful part.
+Seven real defects. I'm listing them because how each was caught is the useful
+part — none came from reading the code.
 
 **Shared module state broke determinism — twice.** Task-slot reservations and
 forklift idle counters lived in module-scope `Map`s. Two engines with the same
@@ -193,6 +194,20 @@ because a truck sitting sideways at a dock looks exactly like a truck queueing
 along the dock face. Caught by dumping simulation state and comparing it against
 what the picture showed.
 
+**`Panel` only rendered its header when given a title.** The operations table
+passes a tab strip as `actions` and no title, so the Docks / Forklifts / Trucks
+tabs never rendered at all. An end-to-end test looking for a tab by role found
+nothing, which is how a missing feature became a failing test rather than a
+thing nobody noticed.
+
+**Dashboard panels inherited `pointer-events: none`.** The layout containers are
+transparent to the pointer so the 3D scene stays reachable in the gaps between
+panels, and the rule putting events back named only `button`. Table rows are
+clickable in this UI and are not buttons, so every click on a row fell through
+to the canvas underneath. Playwright caught it precisely — "canvas intercepts
+pointer events" — where a human would have clicked once, seen nothing happen,
+and assumed the handler was wrong.
+
 **The physics-to-clock ratio was wrong, and it broke the whole floor.** At 60:1,
 a 55-second forklift round trip cost 55 *clock-minutes*, so the dock unloaded ten
 times faster than the floor could put away. The result was 130 queued tasks and
@@ -206,16 +221,49 @@ changed, and a test asserts the queue stays bounded.
 
 ---
 
+**The command palette dropped your first keystrokes on a slow frame.** It reset
+its query inside a `requestAnimationFrame` on open. At 60 fps that callback runs
+in 16 ms and nobody notices; under software rendering at roughly a frame a
+second it landed *after* the user had started typing and wiped the field —
+searching "Trondheim" and pressing Enter did nothing at all. Every automated
+test passed, because the e2e test waits for a result row before pressing Enter.
+I found it by scripting the app and driving it the way a person does: open,
+type, Enter, with no waiting in between. The fix was to stop resetting state
+and let the component unmount when closed, so a fresh mount is the reset.
+
+**The frame-delta clamp makes the engine run slow at very low frame rates.**
+Each frame advances the simulation by at most 250 ms of wall time, so a
+backgrounded tab cannot return and simulate minutes in one blocking burst. Under
+SwiftShader, which renders at about one frame a second, that clamp means
+simulated time advances at roughly a quarter rate. On real hardware frames are
+16 ms and it never engages — but it meant two end-to-end tests asserting on the
+rendered clock were flaky, and they now assert on the engine's tick counter
+instead, which is the thing they were actually trying to test.
+
 ## 6. Known gaps
 
 **Performance is argued, not measured on real hardware.** The container has no
 GPU, so headless Chromium renders through SwiftShader at 1–2 fps. Frame rate
-there is meaningless. I gated on what *is* hardware-independent — draw calls,
-triangle count, texture count, and the engine's per-tick cost (1.14 ms, inside
-the 2.5 ms needed to sustain 20× across three sites). The architecture is right
-for 60 fps (instancing, merged static geometry, ~8 materials, one shadow light,
+there is meaningless. I gated on what *is* hardware-independent: 131 draw calls
+and 107k triangles at Keflavík, 142 and 126k at the ten-door Trondheim site —
+both figures including the shadow pass, so the per-pass count is about half —
+two textures, and an engine tick costing 1.14 ms against the 2.5 ms needed to
+sustain 20× across three sites. Getting there meant merging vehicle wheels and
+masts into their bodies, instancing the dock shutters and the cold-air spill,
+and picking pallets off the instanced mesh rather than through sixty invisible
+proxy boxes; before that it was 229 calls. The architecture is right for 60 fps
+(instancing, merged static geometry, ~8 materials, one shadow-casting light,
 adaptive DPR, zero React renders per frame), but **I have not seen it run at 60
 fps and cannot claim that I have.** Someone should open it on a real laptop.
+
+**The aurora is mostly skylight.** The curtains hang in the sky, and the default
+camera is a steep isometric that contains no sky at all — the top of the frame
+sits about twelve degrees *below* the horizon. Rather than flatten the
+composition to make room for scenery, the aurora is modelled primarily as the
+green cast it throws across a landscape, which is how every photograph of one
+looks and is visible from every view. The curtains themselves are still there,
+and you will see them if you orbit the camera up at night, but they are not part
+of the default composition.
 
 **LOD is not implemented.** The plan called for distant vehicles dropping to a
 merged silhouette. The draw-call budget turned out to have enough headroom that I
@@ -239,9 +287,12 @@ view of alerts that have cleared.
 defensible for a demo, and the seed makes any world reproducible, but a real
 operations surface would keep yesterday's numbers.
 
-**The mobile layout is a reduction, not a design.** Below 860px the right rail
-and the tables are hidden and you get KPIs over the scene. It is honest and it
-doesn't break, but a phone-first version of this would be a different product.
+**Tablet is a compromise; phone is a reduction.** At 1024px the shipment tracker
+needs about 430px to lay five stages out legibly, so below 1180px it is replaced
+by a Shipments tab in the operations table — the same data, scannable rather than
+studied. That one I'm happy with. Below 860px the right rail and the tables are
+hidden entirely and you get KPIs over the scene; it is honest and it doesn't
+break, but a phone-first version of this would be a different product.
 
 **Artifact limitation:** the published page runs in simulated mode only. The
 sandbox blocks WebSocket connections, so `RemoteSource` cannot be exercised
@@ -276,11 +327,13 @@ shadows under vehicles. The reference's warehouse has a softness mine lacks. The
 aurora and the dusk palette are the best things in the scene; the daytime look is
 merely competent.
 
-*The warehouse interior is undersold.* I built an open-top cutaway specifically
-so you could see the racking and the forklifts, and from the default camera the
-forklifts are 2-pixel specks. The scene is framed for the building, not for the
-operation happening inside it. A second camera preset — a low, close "floor view"
-— would have fixed this cheaply and I didn't do it.
+*I shipped a scene framed for the building, not the operation.* The default
+camera reduced a forklift to a few pixels, which wasted the open-top cutaway I
+had built specifically so the floor would be visible. I only noticed because I
+was writing this section. The fix — three derived camera presets, Site, Dock and
+Floor — took twenty minutes and the Dock view is now the best shot in the app.
+The lesson is that the shortcoming was visible in every screenshot I took and I
+looked past it until I made myself write it down.
 
 *Several numbers are arbitrary.* The demand curve, the thermal coefficients, the
 transfer rate and the fleet sizes were tuned until the behaviour looked right,
@@ -290,6 +343,13 @@ physics, but a domain expert would find them naive.
 *The test suite is slow.* The full unit run takes minutes because several tests
 simulate a whole day. I trimmed the worst of it, but a proper build would
 separate fast property tests from a slow nightly soak.
+
+*My tests were politer to the app than a person is.* The palette bug above sat
+behind a green suite because the test waited for a result to render before
+pressing Enter — a reasonable thing for a test to do and not at all what a user
+does. Driving the app end to end as a last step found it in one run. I should
+have done that much earlier and more often, rather than treating a passing suite
+as the same thing as a working app.
 
 *I did not do a formal accessibility audit.* Keyboard access, focus management,
 reduced motion and live regions are all implemented and spot-checked, but I ran
