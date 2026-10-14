@@ -287,12 +287,20 @@ view of alerts that have cleared.
 defensible for a demo, and the seed makes any world reproducible, but a real
 operations surface would keep yesterday's numbers.
 
-**Tablet is a compromise; phone is a reduction.** At 1024px the shipment tracker
+**Phone is a reduction, and a verified one.** The published page was checked
+under the platform's own document wrapper at 400px as well as 1440px: no
+horizontal scroll, an explicit background (a transparent body would show the
+host's light theme through a dark app), and a top bar that sheds its secondary
+controls rather than overflowing — it was 79px too wide before that was fixed.
+What you get on a phone is the KPI column and the alerts over the live scene.
+It is honest and it does not break, but the tables and the right rail are gone
+and a phone-first version of this would be a different product.
+
+**Tablet is a compromise.** At 1024px the shipment tracker
 needs about 430px to lay five stages out legibly, so below 1180px it is replaced
 by a Shipments tab in the operations table — the same data, scannable rather than
 studied. That one I'm happy with. Below 860px the right rail and the tables are
-hidden entirely and you get KPIs over the scene; it is honest and it doesn't
-break, but a phone-first version of this would be a different product.
+hidden entirely and you get KPIs over the scene.
 
 **Artifact limitation:** the published page runs in simulated mode only. The
 sandbox blocks WebSocket connections, so `RemoteSource` cannot be exercised

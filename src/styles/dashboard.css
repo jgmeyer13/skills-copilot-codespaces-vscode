@@ -1214,11 +1214,27 @@
   .toasts { width: auto; left: max(var(--s4), env(safe-area-inset-left, 0px)); }
 }
 
+/*
+ * Phone. The top bar carries nine controls and will not fit; it sheds the
+ * secondary ones rather than overflowing, which it did by 79px before this
+ * block existed. What survives is identity, which site you are on, search,
+ * the time, and the two things that can demand attention.
+ */
 @media (max-width: 560px) {
   .kpi-row { grid-template-columns: 1fr; }
+  .topbar { gap: var(--s3); }
+
+  /* Search collapses to its icon. */
+  .search-trigger { flex: 0 0 auto; max-width: none; padding: 7px; }
   .search-trigger-text { display: none; }
+  .search-trigger .kbd { display: none; }
+
   .clock-sub { display: none; }
-  .pip-text { display: none; }
+  .pip { display: none; }
+  .brand-rule { display: none; }
+  .site-meta { display: none; }
+  .user-trigger { padding: var(--s2); }
+  .user-trigger svg { display: none; }
 }
 
 /* ── Reduced motion ───────────────────────────────────────────────────────── */
