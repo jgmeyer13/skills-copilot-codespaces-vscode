@@ -23,7 +23,7 @@ import { createSelector, motionBetween, features } from './scoring.js'
 
 export const CAPTURE_FPS = 15
 
-export function createCapture({ video, pose, steps, onTick, onStep, mirrored = true }) {
+export function createCapture({ video, pose, steps, onTick, onStep, onGrab, mirrored = true }) {
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d', { willReadFrequently: false })
 
@@ -102,7 +102,19 @@ export function createCapture({ video, pose, steps, onTick, onStep, mirrored = t
         const motion = motionBetween(prevPeople, people, dt)
         const selector = selectors.get(at.step.id)
         const hold = holds.get(at.step.id)
-        const score = selector.consider(people, motion, now, () => grabInto(hold))
+        /*
+         * A shutter the member can see.
+         *
+         * Without it the thirty seconds are a countdown with no evidence that
+         * anything was taken — people hold a pose, see nothing happen, and
+         * assume it failed. The frame that fires this is the one that is
+         * actually being kept at that moment, so the feedback is true rather
+         * than decorative.
+         */
+        const score = selector.consider(people, motion, now, () => {
+          grabInto(hold)
+          onGrab?.({ step: at.step, index: at.index, score: hold.score })
+        })
 
         /*
          * Never leave a step empty.

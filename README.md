@@ -27,7 +27,7 @@ Three documents matter more than the code:
 |---|---|
 | **Check in** | Two identity modes, set by `memberIdMode` in `config.json`. `phone-hash` salts and hashes the number on the device — convenient, but reversible by anyone holding the laptop, so the records stay personal information (risk 1). `code` issues a random code the member keeps on their phone, and stores nothing derived from them at all. |
 | **Consent** | Built from `consent/consent.en.md`, which a lawyer can edit without touching code. Three ticks: 18+, the recording, and — separately and off by default — keeping a history. |
-| **Mirror** | Live view with a floor mark, and the blue ghost outline of the member's last visit if they kept one. |
+| **Mirror** | The product. Live view with the floor mark, the ghost of the body that stood here last time, and a lock ring around the member's own hips that fills while they hold the position. One instruction at a time — step back, step left, square up — because four corrections at once get none of them done. It never disables Start: alignment is advice, and advice that locks the door is not advice. |
 | **Capture** | Thirty seconds, solo or up to three. MediaPipe Pose runs in the browser and picks the best held frame per pose, plus one candid. |
 | **Review** | Five photographs, **unlabelled, in random order**. Keep, or send and wipe. Anything not kept is deleted immediately; anything missed is deleted at end of day. The member is never told which frame is the comparison one — which one they keep is the measurement, and an interface that explains the measurement to its subject has destroyed it. |
 | **Compare** | Returning members who kept a comparison frame see then and now — side by side by default, with a slide-across view on request. Side by side leads because it shows both bodies at once; the wipe looks better and shows half as much. |
@@ -77,6 +77,8 @@ tools/              clip generation, scoring tests, end-to-end verification
 
 ```bash
 node tools/test-scoring.mjs    # the pose templates, against synthetic skeletons
+node tools/test-align.mjs      # the alignment maths — distance, drift, rotation, the hold
+node tools/test-mirror.mjs     # the same maths reaching the screen, in a real browser
 node tools/make-clips.mjs      # renders the fake-camera clips (writes to /tmp)
 node tools/verify.mjs          # 27 steps, end to end, no camera and no person
 ```
