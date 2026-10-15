@@ -217,9 +217,10 @@ p  { margin: 0 0 12px; color: var(--text-2); line-height: 1.6; font-size: clamp(
 
 /* ── compare ─────────────────────────────────────────────────────────────── */
 
-.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 760px; margin: 0 auto; width: 100%; }
-.compare figure { margin: 0; }
-.compare img { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: var(--r); border: 1px solid var(--hair); background: #000; }
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 760px; margin: 0 auto; width: 100%; height: 100%; min-height: 0; }
+.compare[hidden] { display: none; }
+.compare figure { margin: 0; display: flex; flex-direction: column; min-height: 0; }
+.compare img { width: 100%; flex: 1 1 auto; min-height: 0; aspect-ratio: 3/4; object-fit: cover; border-radius: var(--r); border: 1px solid var(--hair); background: #000; }
 .compare figcaption { display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; color: var(--text-3); }
 
 /* ── then and now, slid across ───────────────────────────────────────────── */
@@ -232,10 +233,22 @@ p  { margin: 0 0 12px; color: var(--text-2); line-height: 1.6; font-size: clamp(
  * Both images are drawn at the same size from the same mark under the same
  * light, which is the only reason overlaying them means anything at all.
  */
-.wipe { max-width: 460px; margin: 0 auto; width: 100%; }
+/*
+ * The wipe shows one photograph at full width where side by side shows two at
+ * half, so it is nearly twice as tall. Left to size itself it pushed the
+ * "Side by side" and "Done" buttons off the bottom of a laptop screen: a
+ * member could switch to this view and then have no way back and no way out.
+ *
+ * So the stack takes its height from the space the column actually has, and
+ * derives its width from that. It is the height that is scarce here, never
+ * the width.
+ */
+.wipe { max-width: 460px; margin: 0 auto; width: 100%; height: 100%; display: flex; flex-direction: column; min-height: 0; }
 .wipe[hidden] { display: none; }
 .wipe-stack {
-  position: relative; width: 100%; aspect-ratio: 3/4; border-radius: var(--r);
+  position: relative; flex: 1 1 auto; min-height: 0;
+  height: 100%; aspect-ratio: 3/4; width: auto; max-width: 100%; margin: 0 auto;
+  border-radius: var(--r);
   overflow: hidden; border: 1px solid var(--hair); background: #000;
   touch-action: none; cursor: ew-resize;
 }

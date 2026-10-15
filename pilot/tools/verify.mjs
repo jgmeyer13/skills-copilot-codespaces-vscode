@@ -52,6 +52,17 @@ const server = createServer(async (req, res) => {
 await new Promise((r) => server.listen(PORT, '127.0.0.1', r))
 
 const failures = []
+
+/*
+ * On failure the app is put back to the attract screen before the next step
+ * runs. Without that, one broken step strands the app mid-flow and every step
+ * after it fails too, all reporting the same thing — three identical failures
+ * for one bug, and no way to tell the cause from the casualties.
+ *
+ * The page is passed in rather than captured, because two launches share this
+ * harness and only one of them is live at a time.
+ */
+let currentPage = null
 const step = async (label, fn) => {
   try {
     const detail = await fn()
@@ -59,6 +70,11 @@ const step = async (label, fn) => {
   } catch (e) {
     failures.push(label)
     console.log(`  ✗ ${label} — ${String(e.message).split('\n')[0].slice(0, 180)}`)
+    if (currentPage) {
+      await currentPage
+        .evaluate(() => window.__pilot && window.__pilot.show('attract'))
+        .catch(() => {})
+    }
   }
 }
 
@@ -185,6 +201,7 @@ console.log(`\npilot end to end\n`)
 {
   const browser = await browserFor('solo.y4m')
   const { page, errors } = await openPage(browser)
+  currentPage = page
 
   await step('demo mode is impossible to miss', async () => {
     const ribbon = await page.locator('#demo-ribbon').isVisible()
@@ -379,12 +396,25 @@ console.log(`\npilot end to end\n`)
       throw new Error(`the images are different sizes mid-wipe: ${sizes.then} vs ${sizes.now}`)
     }
 
+    // The bug this step exists to catch: the taller view pushed these buttons
+    // off the bottom of the screen, so a member could switch to the wipe and
+    // then have no way back and no way out.
+    const offscreen = await page.evaluate(() => {
+      const bad = []
+      for (const id of ['view-side', 'view-wipe', 'compare-done']) {
+        const b = document.getElementById(id).getBoundingClientRect()
+        if (b.bottom > window.innerHeight || b.top < 0) bad.push(`${id} at ${Math.round(b.top)}..${Math.round(b.bottom)} of ${window.innerHeight}`)
+      }
+      return bad
+    })
+    if (offscreen.length) throw new Error(`out of reach in the wipe view: ${offscreen.join(', ')}`)
+
     await tap(page, '#view-side')
     if (!(await page.locator('#compare').isVisible())) throw new Error('cannot get back to side by side')
 
     await tap(page, '#compare-done')
     await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'attract', null, { timeout: 20_000 })
-    return 'side by side by default, wipe on request, both images loaded, slider drives the clip'
+    return 'side by side by default, wipe on request, both images loaded, slider drives the clip, every control on screen in both views'
   })
 
   await step('a member can have everything of theirs deleted, on the spot', async () => {
@@ -615,6 +645,7 @@ console.log(`\npilot end to end\n`)
 {
   const browser = await browserFor('squad.y4m')
   const { page, errors } = await openPage(browser)
+  currentPage = page
   await page.evaluate(() => { for (const s of window.__pilot.config.capture.steps) s.seconds = 1.5 })
 
   await step('three people are tracked and logged as one squad session', async () => {
@@ -648,6 +679,7 @@ console.log(`\npilot end to end\n`)
   configOverride = { privacy: { memberIdMode: 'code' } }
   const browser = await browserFor('solo.y4m')
   const { page, errors } = await openPage(browser)
+  currentPage = page
   await page.evaluate(() => { for (const s of window.__pilot.config.capture.steps) s.seconds = 1.2 })
 
   let code = null
