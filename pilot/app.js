@@ -89,6 +89,87 @@ setInterval(() => db.purge({ retentionDays: config.privacy.keptFrameRetentionDay
 
 renderLanguages()
 renderConsent()
+// ── the idle watchdog ──────────────────────────────────────────────────────
+/*
+ * A member walks off. It happens — someone's set is called, a friend arrives,
+ * they change their mind halfway through the consent text. What must not
+ * happen is the next person stepping up to the previous person's photographs
+ * still on screen, and that is exactly what an unattended review screen is.
+ *
+ * Three rules, and the third is the one worth stating:
+ *
+ *  - The attract and operator screens never time out. One is the idle state
+ *    and the other has an operator standing at it.
+ *  - The capture screen never times out either. Holding still and touching
+ *    nothing is the whole task; a watchdog that fired there would be firing
+ *    on success.
+ *  - Everywhere else, a wordless timeout would be its own small betrayal, so
+ *    it warns first and the warning is dismissible by touching anything.
+ *
+ * A timeout at the review screen deletes the photographs rather than leaving
+ * them for the purge: "deleted the same day" is the promise, but nobody wants
+ * their unchosen photographs sitting on a screen in a gym until midnight.
+ */
+
+/*
+ * This whole block sits above the top-level show('attract') on purpose.
+ * Functions hoist; the `let`s below do not, and show() calls armIdle() during
+ * module evaluation, so declaring them later puts them in the temporal dead
+ * zone at exactly the moment they are first touched. That is the third time
+ * this file has been bitten by declaration order, which is why it is written
+ * down here rather than rediscovered a fourth time.
+ */
+function idleMsFor(screen) {
+  return {
+    checkin: 90_000,
+    consent: 180_000,   // there is a lot to read, and it should be read
+    ready: 120_000,
+    review: 150_000,
+    compare: 90_000,
+  }[screen] ?? null
+}
+const IDLE_WARNING = 20_000
+
+let idleTimer = null
+let idleWarnTimer = null
+
+function clearIdle() {
+  clearTimeout(idleTimer)
+  clearTimeout(idleWarnTimer)
+  idleTimer = idleWarnTimer = null
+  const el = $('idle-warning')
+  if (el) el.hidden = true
+}
+
+async function idleGiveUp() {
+  clearIdle()
+  const screen = state.screen
+  // Anything the member had not chosen goes now rather than at midnight.
+  if (screen === 'review' && state.session) {
+    await db.deleteSessionFrames(state.session.id)
+    state.frames = state.frames.map((f) => ({ ...f, kept: false }))
+    await finishSession('abandoned')
+  }
+  await reset()
+  banner('Timed out. The screen has been cleared for the next person.', 5000)
+}
+
+function armIdle() {
+  clearIdle()
+  const ms = idleMsFor(state.screen)
+  if (!ms) return
+  idleWarnTimer = setTimeout(() => {
+    const el = $('idle-warning')
+    if (el) el.hidden = false
+  }, ms - IDLE_WARNING)
+  idleTimer = setTimeout(idleGiveUp, ms)
+}
+
+for (const ev of ['pointerdown', 'keydown', 'touchstart']) {
+  document.addEventListener(ev, () => { if (idleTimer) armIdle() }, { passive: true, capture: true })
+}
+
+
 await refreshPilotState()
 show('attract')
 
@@ -157,6 +238,9 @@ function show(screen) {
   state.screen = screen
   app.dataset.screen = screen
   if (screen === 'dashboard') renderDashboard()
+  // Declared below; show() is only ever called from an event, never during
+  // module evaluation, so the hoisting works out.
+  armIdle()
 }
 
 function banner(text, ms = 2600) {
@@ -166,6 +250,7 @@ function banner(text, ms = 2600) {
   clearTimeout(banner.t)
   banner.t = setTimeout(() => { el.hidden = true }, ms)
 }
+
 
 for (const b of document.querySelectorAll('[data-back]')) {
   b.addEventListener('click', () => {
@@ -809,6 +894,18 @@ async function presentCompare() {
   const first = history[0]
   const latest = history[history.length - 1]
   $('compare-sub').textContent = `Same mark, same light, ${apart(first.createdAt, latest.createdAt)}.`
+  // The wipe view needs the two images at a stable size; the clip is a
+  // percentage of the frame, so both must be laid out identically or the
+  // bodies will not line up and the comparison becomes a lie.
+  const thenUrl = URL.createObjectURL(first.blob)
+  const nowUrl = URL.createObjectURL(latest.blob)
+  $('wipe-then').src = thenUrl
+  $('wipe-now').src = nowUrl
+  $('wipe-key-then').textContent = `First visit · ${new Date(first.createdAt).toLocaleDateString('en-ZA')}`
+  $('wipe-key-now').textContent = `Today · ${new Date(latest.createdAt).toLocaleDateString('en-ZA')}`
+  setWipe(50)
+  setCompareView('side')
+
   $('compare').innerHTML = [first, latest]
     .map(
       (f, i) => `
@@ -820,7 +917,153 @@ async function presentCompare() {
     .join('')
   show('compare')
 }
+/*
+ * Two ways to look at the same pair. The wipe is driven by a range input as
+ * well as by dragging, because a range input is what a screen reader and a
+ * keyboard can both operate, and because a member in gym gloves on a laptop
+ * trackpad has a bad time dragging anything.
+ */
+function setWipe(pct) {
+  const clamped = Math.max(0, Math.min(100, pct))
+  $('wipe-stack').style.setProperty('--wipe', `${clamped}%`)
+  $('wipe-handle').style.left = `${clamped}%`
+  if ($('wipe-slider').valueAsNumber !== clamped) $('wipe-slider').value = String(clamped)
+}
+
+function setCompareView(which) {
+  const wipe = which === 'wipe'
+  $('compare').hidden = wipe
+  $('wipe-view').hidden = !wipe
+  $('view-side').setAttribute('aria-pressed', String(!wipe))
+  $('view-wipe').setAttribute('aria-pressed', String(wipe))
+}
+
+$('view-side').addEventListener('click', () => setCompareView('side'))
+$('view-wipe').addEventListener('click', () => setCompareView('wipe'))
+$('wipe-slider').addEventListener('input', (e) => setWipe(e.target.valueAsNumber))
+
+{
+  const stack = $('wipe-stack')
+  let dragging = false
+  const at = (e) => {
+    const box = stack.getBoundingClientRect()
+    setWipe(((e.clientX - box.left) / box.width) * 100)
+  }
+  stack.addEventListener('pointerdown', (e) => {
+    dragging = true
+    stack.setPointerCapture(e.pointerId)
+    at(e)
+  })
+  stack.addEventListener('pointermove', (e) => { if (dragging) at(e) })
+  for (const ev of ['pointerup', 'pointercancel']) {
+    stack.addEventListener(ev, () => { dragging = false })
+  }
+}
+
 $('compare-done').addEventListener('click', () => reset())
+
+
+// ── forget me ──────────────────────────────────────────────────────────────
+/*
+ * The consent text says: "You can ask us to delete everything of yours at any
+ * point, including during your session, and we will do it in front of you."
+ *
+ * That sentence was in the app for a fortnight before anything implemented it,
+ * which made it the only false thing on the consent screen. It is reachable
+ * from the two screens where the member is standing there and identified, and
+ * from the operator screen for the member who rings up next week.
+ *
+ * It states the count before deleting and the count after, because "we deleted
+ * it, trust us" is exactly the assurance this product is trying not to give.
+ */
+
+const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`
+
+async function forgetFlow(memberKey, { onDone } = {}) {
+  if (!memberKey) return banner('Nothing on this laptop is linked to you.', 4000)
+
+  const frames = await db.framesForMember(memberKey)
+  const sessions = (await db.listSessions()).filter((r) => r.memberKey === memberKey)
+
+  $('forget-body').innerHTML = `
+    <p>Right now this laptop holds:</p>
+    <ul>
+      <li><b>${plural(frames.length, 'photograph')}</b> of you</li>
+      <li><b>${plural(sessions.length, 'visit')}</b> on record</li>
+      <li>the scrambled version of your ${codeMode ? 'code' : 'phone number'}</li>
+    </ul>
+    <p>All of that goes now and cannot be brought back. What stays is a row
+    saying a session happened — no photograph, no outline, nothing that points
+    to you — because the pilot counts visits, and we are not allowed to make
+    that count wrong to flatter ourselves.</p>`
+
+  $('forget-sheet').hidden = false
+  $('forget-go').focus()
+
+  const close = () => {
+    $('forget-sheet').hidden = true
+    $('forget-go').onclick = null
+    $('forget-cancel').onclick = null
+  }
+
+  $('forget-cancel').onclick = close
+  $('forget-go').onclick = async () => {
+    let gone
+    try {
+      gone = await db.forgetMember(memberKey)
+    } catch (e) {
+      // A deletion that fails quietly is worse than one that fails loudly:
+      // the member walks away believing their photographs are gone.
+      close()
+      return banner(`Deletion FAILED — nothing was removed. Tell the operator. (${e.message})`, 12000)
+    }
+    close()
+    banner(
+      `Deleted: ${plural(gone.frames, 'photograph')}, ${plural(gone.sessions, 'visit')} unlinked. Nothing of yours is left here.`,
+      6000,
+    )
+    if (onDone) await onDone()
+  }
+}
+
+for (const b of document.querySelectorAll('[data-forget]')) {
+  b.addEventListener('click', () => forgetFlow(state.memberKey, { onDone: reset }))
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('forget-sheet').hidden) $('forget-cancel').click()
+})
+
+/*
+ * The same request, a week later, over the phone. The operator types what the
+ * member gives them and the laptop derives the same key it derived at check-in
+ * — which is the one useful thing about a deterministic hash, and the reason
+ * risk 1 exists. In code mode, a member who has lost their code genuinely
+ * cannot be found, and the operator has to be able to say so.
+ */
+$('forget-member').addEventListener('click', async () => {
+  const typed = window.prompt(
+    codeMode
+      ? 'The member\u2019s code, as it was issued to them (e.g. ABC-234):'
+      : 'The member\u2019s phone number, as they typed it at check-in:',
+  )
+  if (!typed) return
+
+  const key = codeMode
+    ? db.memberKeyForCode(typed.trim())
+    : await db.memberKeyFor(typed.trim(), config.privacy.phoneSalt)
+
+  if (!key) return banner('That is not a valid code.', 4000)
+  if (!(await db.getMember(key))) {
+    return banner(
+      codeMode
+        ? 'No member on this laptop has that code. Without it there is nothing to find.'
+        : 'No member on this laptop has that number. Check it and try again.',
+      6000,
+    )
+  }
+  await forgetFlow(key, { onDone: renderDashboard })
+})
 
 // ── dashboard ──────────────────────────────────────────────────────────────
 
@@ -964,5 +1207,7 @@ window.__pilot = {
   async wipe() { await db.wipeEverything(); await refreshPilotState() },
   /** What the review screen is showing, in display order, with hidden kinds. */
   reviewOrder: () => [...document.querySelectorAll('#frames .frame-card')].map((c) => c.dataset.kind),
+  idleFor: idleMsFor,
+  forceIdle: () => idleGiveUp(),
   reviewLabels: () => [...document.querySelectorAll('#frames .frame-card')].map((c) => c.textContent.trim()),
 }

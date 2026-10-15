@@ -14,7 +14,7 @@
 import { chromium } from '@playwright/test'
 import { readFile, writeFile } from 'node:fs/promises'
 
-const [src, title = 'Document'] = process.argv.slice(2)
+const [src, title = 'Document', footnote = 'not legal advice'] = process.argv.slice(2)
 const raw = await readFile(src, 'utf8')
 
 // ── unwrap ─────────────────────────────────────────────────────────────────
@@ -67,7 +67,11 @@ function blocks(lines) {
   let quote = []
   let i = 0
 
-  const flushList = () => { if (list) { out.push(`<${list.tag}>${list.items.join('')}</${list.tag}>`); list = null } }
+  const flushList = () => {
+    if (!list) return
+    out.push(`<${list.tag}>${list.items.join('')}</${list.close ?? list.tag}>`)
+    list = null
+  }
   const flushQuote = () => {
     if (!quote.length) return
     out.push(`<blockquote>${blocks(unwrap(quote.join('\n')))}</blockquote>`)
@@ -96,13 +100,22 @@ function blocks(lines) {
     }
 
     if (isBullet(l)) {
-      if (!list || list.tag !== 'ul') { flushList(); list = { tag: 'ul', items: [] } }
-      list.items.push(`<li>${inline(l.replace(/^\s*[-*]\s/, ''))}</li>`)
+      const text = l.replace(/^\s*[-*]\s/, '')
+      // A run-sheet is printed and ticked with a pen, so "- [ ]" has to come
+      // out as something you can put a mark in, not as two literal brackets.
+      const task = /^\[([ xX])\]\s*/.exec(text)
+      const tag = task ? 'ul class="tasks"' : 'ul'
+      if (!list || list.tag !== tag) { flushList(); list = { tag, close: 'ul', items: [] } }
+      list.items.push(
+        task
+          ? `<li><span class="box">${task[1] === ' ' ? '' : '✓'}</span>${inline(text.slice(task[0].length))}</li>`
+          : `<li>${inline(text)}</li>`,
+      )
       i++
       continue
     }
     if (isNumber(l)) {
-      if (!list || list.tag !== 'ol') { flushList(); list = { tag: 'ol', items: [] } }
+      if (!list || list.tag !== 'ol') { flushList(); list = { tag: 'ol', close: 'ol', items: [] } }
       list.items.push(`<li>${inline(l.replace(/^\s*\d+\.\s/, ''))}</li>`)
       i++
       continue
@@ -146,6 +159,13 @@ const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(titl
   blockquote ul { margin-bottom: 6pt; }
   code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9pt; background: #eef1f4; padding: 1pt 3pt; border-radius: 2pt; }
   strong { font-weight: 680; }
+  ul.tasks { list-style: none; padding-left: 2pt; }
+  ul.tasks li { margin-bottom: 7pt; padding-left: 20pt; text-indent: -20pt; }
+  .box {
+    display: inline-block; width: 10pt; height: 10pt; margin-right: 8pt;
+    border: 0.9pt solid #6b7684; border-radius: 1.5pt; vertical-align: -1pt;
+    text-indent: 0; text-align: center; line-height: 10pt; font-size: 8pt;
+  }
 </style></head><body>${body}</body></html>`
 
 await writeFile('/tmp/pack.html', html)
@@ -160,7 +180,7 @@ await page.pdf({
   margin: { top: '20mm', bottom: '18mm', left: '18mm', right: '18mm' },
   displayHeaderFooter: true,
   headerTemplate: '<div></div>',
-  footerTemplate: `<div style="width:100%;font:8pt Helvetica,Arial;color:#8a939f;padding:0 18mm;display:flex;justify-content:space-between"><span>${esc(title)} · not legal advice</span><span class="pageNumber"></span></div>`,
+  footerTemplate: `<div style="width:100%;font:8pt Helvetica,Arial;color:#8a939f;padding:0 18mm;display:flex;justify-content:space-between"><span>${esc(title)}${footnote ? ' · ' + esc(footnote) : ''}</span><span class="pageNumber"></span></div>`,
 })
 await b.close()
 console.log(outFile)

@@ -232,11 +232,32 @@ I cannot verify is worse than an obvious gap (question 5).
 ### 6. Retention and deletion — ss 14, 24
 
 Unkept photographs are deleted the same day, automatically, checked on startup
-and every ten minutes. Kept photographs expire after 180 days. A member can
-demand deletion at any point and it is done in front of them.
+and every ten minutes. Kept photographs expire after 180 days.
 
-Open question: who performs a deletion request when the pop-up is not running,
-and how does a member reach us (question 6).
+A member can demand deletion at any point and it is done in front of them —
+from the screen they are already holding, or by the operator on their behalf
+if they ring up a week later. The screen states what is about to go before it
+goes and what went afterwards.
+
+A screen left untouched clears itself, with a warning first. If that happens
+at the point where the member is choosing photographs, the photographs are
+deleted there and then rather than waiting for the end-of-day sweep, and the
+visit is recorded as abandoned. This matters because the realistic privacy
+failure in a gym is not an attacker — it is the next person in the queue
+reading the screen the last one walked away from.
+
+**One judgement call in there needs your eye.** A deletion removes the
+photographs, the body outline and the scrambled identifier outright. It does
+not remove the row recording that a session happened; it strips the identifier
+off that row and marks it as forgotten. My reasoning is that a row reading
+"one person, four minutes, two photographs kept, Tuesday" with no identifier
+on it is no longer information about anybody, and that deleting it instead
+would quietly falsify the only count the pilot exists to produce. I may have
+that balance wrong, and if I do the fix is one line (question 6).
+
+Open question also: who performs a deletion request when the pop-up is not
+running, and how does a member reach us at all once the four weeks are over
+and the laptop is closed.
 
 ### 7. Security safeguards — s 19
 

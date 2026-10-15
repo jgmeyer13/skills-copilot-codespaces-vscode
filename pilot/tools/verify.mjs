@@ -114,7 +114,7 @@ async function identify(page, who) {
 }
 
 /** One member, from the attract screen to a closed session row. */
-async function runSession(page, { who, people = 1, keepHistory = true, stream, keep = ['measurement', 'post'], wipe = false, seconds }) {
+async function runSession(page, { who, people = 1, keepHistory = true, stream, keep = ['measurement', 'post'], wipe = false, seconds, stopAtReview = false }) {
   await page.locator('#start').click()
   await identify(page, who)
   await page.locator('#tick-age').check()
@@ -130,6 +130,7 @@ async function runSession(page, { who, people = 1, keepHistory = true, stream, k
   await page.locator('#begin').click()
   await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'review', null, { timeout: (seconds + 30) * 1000 })
 
+  if (stopAtReview) return
   if (wipe) {
     await page.locator('#wipe-all').click()
     await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'attract', null, { timeout: 20_000 })
@@ -309,6 +310,153 @@ console.log(`\npilot end to end\n`)
     if (after.frames !== 0) throw new Error(`${after.frames} images survived a wipe`)
     if (after.outcome !== 'wiped') throw new Error(`logged as ${after.outcome}`)
     return `${after.produced} produced, 0 retained, logged as wiped`
+  })
+
+  await step('then and now offers both views and defaults to the honest one', async () => {
+    // A wipe slider looks better than two photographs side by side and shows
+    // less. Side by side has to be what a returning member meets first.
+    const who = '0825550777'
+    await runSession(page, { who, stream: streamFor(1, SHORT), seconds: 6, keep: ['measurement'] })
+    await runSession(page, { who, stream: streamFor(1, SHORT), seconds: 6, keep: ['measurement'] })
+    await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'compare', null, { timeout: 20_000 })
+
+    if (!(await page.locator('#compare').isVisible())) throw new Error('side by side is not the default')
+    if (await page.locator('#wipe-view').isVisible()) throw new Error('the wipe view is showing first')
+
+    await page.locator('#view-wipe').click()
+    if (!(await page.locator('#wipe-view').isVisible())) throw new Error('the wipe view never appeared')
+    if (await page.locator('#compare').isVisible()) throw new Error('both views are showing at once')
+
+    // Both images must actually be loaded, or the wipe reveals a blank.
+    const loaded = await page.evaluate(() => {
+      const a = document.getElementById('wipe-then')
+      const b = document.getElementById('wipe-now')
+      return a.complete && a.naturalWidth > 0 && b.complete && b.naturalWidth > 0
+    })
+    if (!loaded) throw new Error('an image in the wipe view did not load')
+
+    await page.locator('#wipe-slider').fill('18')
+    await page.locator('#wipe-slider').dispatchEvent('input')
+    const pos = await page.evaluate(() => document.getElementById('wipe-stack').style.getPropertyValue('--wipe'))
+    if (pos.trim() !== '18%') throw new Error(`the slider moved to ${pos || '(nothing)'}`)
+
+    // The two images must stay the same size as the handle moves, or the
+    // bodies drift apart and the comparison means nothing.
+    const sizes = await page.evaluate(() => {
+      const r = (id) => { const b = document.getElementById(id).getBoundingClientRect(); return [Math.round(b.width), Math.round(b.height)] }
+      return { then: r('wipe-then'), now: r('wipe-now') }
+    })
+    if (sizes.then[0] !== sizes.now[0] || sizes.then[1] !== sizes.now[1]) {
+      throw new Error(`the images are different sizes mid-wipe: ${sizes.then} vs ${sizes.now}`)
+    }
+
+    await page.locator('#view-side').click()
+    if (!(await page.locator('#compare').isVisible())) throw new Error('cannot get back to side by side')
+
+    await page.locator('#compare-done').click()
+    await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'attract', null, { timeout: 20_000 })
+    return 'side by side by default, wipe on request, both images loaded, slider drives the clip'
+  })
+
+  await step('a member can have everything of theirs deleted, on the spot', async () => {
+    // The consent text promises deletion "in front of you". This is that
+    // promise, exercised through the operator's own control rather than
+    // through the database, because the database was never the broken part.
+    const who = '0847776666'
+    await runSession(page, { who, stream: streamFor(1, SHORT), seconds: 6, keep: ['measurement', 'post'] })
+
+    const before = await page.evaluate(async (phone) => {
+      const key = await window.__pilot.db.memberKeyFor(phone, window.__pilot.config.privacy.phoneSalt)
+      return {
+        key,
+        frames: (await window.__pilot.db.framesForMember(key)).length,
+        member: !!(await window.__pilot.db.getMember(key)),
+      }
+    }, who)
+    if (!before.frames) throw new Error('nothing was kept, so the deletion proves nothing')
+
+    await page.evaluate(() => window.__pilot.show('dashboard'))
+    page.once('dialog', (d) => d.accept(who))
+    await page.locator('#forget-member').click()
+    try {
+      await page.waitForSelector('#forget-sheet:not([hidden])', { timeout: 10_000 })
+    } catch (e) {
+      const why = await page.locator('#banner').innerText().catch(() => '(no banner)')
+      throw new Error(`the sheet never opened; the app said: ${why}`)
+    }
+
+    const offered = await page.locator('#forget-body').innerText()
+    if (!/photograph/i.test(offered)) throw new Error('the sheet does not say what is about to go')
+
+    await page.locator('#forget-go').click()
+    try {
+      // state: 'attached' matters — the default is 'visible', and a hidden
+      // element is never visible, so the default times out on success.
+      await page.waitForSelector('#forget-sheet[hidden]', { state: 'attached', timeout: 10_000 })
+    } catch {
+      const said = await page.locator('#banner').innerText().catch(() => '(no banner)')
+      throw new Error(`the sheet stayed open after confirming; the app said: ${said}; errors: ${errors.slice(0, 2).join(' | ') || 'none'}`)
+    }
+
+    const after = await page.evaluate(async (key) => {
+      const sessions = await window.__pilot.db.listSessions()
+      const consents = await window.__pilot.db.listConsents()
+      return {
+        frames: (await window.__pilot.db.framesForMember(key)).length,
+        member: !!(await window.__pilot.db.getMember(key)),
+        stillLinked: sessions.filter((r) => r.memberKey === key).length
+          + consents.filter((c) => c.memberKey === key).length,
+        forgottenRows: sessions.filter((r) => r.forgotten).length,
+        sessionsTotal: sessions.length,
+      }
+    }, before.key)
+
+    if (after.frames) throw new Error(`${after.frames} photographs survived the deletion`)
+    if (after.member) throw new Error('the member row survived')
+    if (after.stillLinked) throw new Error(`${after.stillLinked} row(s) still carry the member key`)
+    if (!after.forgottenRows) throw new Error('the visit was deleted outright, corrupting the count')
+    // Leave the app where this step found it, so the next one starts from the
+    // member flow rather than from the operator screen.
+    await page.evaluate(() => window.__pilot.show('attract'))
+    return `${before.frames} photographs gone, ${after.forgottenRows} visit(s) kept but unlinked, ${after.sessionsTotal} session rows intact`
+  })
+
+  await step('an abandoned review screen clears itself and keeps nothing', async () => {
+    // Someone's set gets called and they walk off mid-review. The next person
+    // must not meet their photographs, and the photographs must not wait for
+    // the midnight purge to go.
+    await runSession(page, {
+      who: '0848881111', stream: streamFor(1, SHORT), seconds: 6, keep: [], stopAtReview: true,
+    })
+    const sessionId = await page.evaluate(() => window.__pilot.state.session.id)
+    const held = await page.evaluate(async (id) => (await window.__pilot.db.framesForSession(id)).length, sessionId)
+    if (!held) throw new Error('no photographs on screen, so the timeout proves nothing')
+
+    await page.evaluate(() => window.__pilot.forceIdle())
+    await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'attract', null, { timeout: 10_000 })
+
+    const after = await page.evaluate(async (id) => {
+      const rows = await window.__pilot.db.listSessions()
+      const row = rows.find((r) => r.id === id)
+      return {
+        frames: (await window.__pilot.db.framesForSession(id)).length,
+        outcome: row?.outcome,
+      }
+    }, sessionId)
+
+    if (after.frames) throw new Error(`${after.frames} photographs were left on screen`)
+    if (after.outcome !== 'abandoned') throw new Error(`logged as ${after.outcome}, so it counts against keep rate`)
+
+    const screens = await page.evaluate(() => ({
+      capture: window.__pilot.idleFor('capture'),
+      attract: window.__pilot.idleFor('attract'),
+      dashboard: window.__pilot.idleFor('dashboard'),
+      review: window.__pilot.idleFor('review'),
+    }))
+    if (screens.capture || screens.attract || screens.dashboard) {
+      throw new Error('a screen that must never time out has a timeout')
+    }
+    return `${held} photographs cleared, logged abandoned, capture/attract/operator exempt, review at ${screens.review / 1000}s`
   })
 
   await step('the dashboard stays sealed while the pilot runs', async () => {

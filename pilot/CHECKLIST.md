@@ -61,6 +61,10 @@ operator screen under "Image quality and what the model could see".
 ## 3. Thirty seconds
 
 - [ ] Press Start. The cue reads **Stand on the mark** and counts down.
+- [ ] **Stand on the mark and read the screen from there**, not from beside
+      the laptop. The pose name, the countdown and the Got it / Adjust badge
+      must all be readable at 2.5 m. If they are not, say so — that is a
+      sizing decision, not a preference.
 - [ ] Four more cues follow: front double bicep, side chest, back double bicep,
       then "however you like".
 - [ ] The badge says **Got it** when you hold a pose properly, **Adjust** when
@@ -83,7 +87,11 @@ operator screen under "Image quality and what the model could see".
 - [ ] Run a second session with the **same number**: it should greet you, and
       the **blue ghost outline** of your last visit should appear on the mirror.
 - [ ] Keep the comparison frame again → the **then-and-now** screen appears,
-      captioned "taken the same day".
+      captioned "taken the same day", showing both photographs side by side.
+- [ ] Press **Slide across** and drag the handle. Your body must stay exactly
+      the same size as the handle moves — if it grows or shrinks, the two
+      photographs are not comparable and the view is lying. Tell me.
+- [ ] Press **Side by side** again and confirm it comes back.
 - [ ] Run a third with a **different** number and press **Send & wipe**.
       Check Operator: that row says `wiped`, and nothing of it remains.
 
@@ -94,7 +102,31 @@ operator screen under "Image quality and what the model could see".
 - [ ] Afterwards, check the frames caught all three in shot and reasonably
       posed — this is the bit most likely to disappoint.
 
-## 7. The operator view
+## 7. Deleting a member, which you will be asked to do
+
+- [ ] At the review screen, press **Delete everything of mine on this laptop**.
+      It should tell you how many photographs and visits are about to go.
+- [ ] Confirm. Check Operator: the photographs are gone and the visit row is
+      still there, with no member against it.
+- [ ] Check in again with the **same number**. It should greet you as new —
+      no ghost outline, no history. If it remembers you, the deletion lied.
+- [ ] Now from Operator: **Delete a member**, type a number that was never
+      used. It should say it cannot find them rather than pretending to work.
+
+## 8. Walking away
+
+- [ ] Get to the review screen with photographs on it and **touch nothing**.
+      A warning should appear after a couple of minutes, and the screen should
+      clear itself shortly after.
+- [ ] Check Operator: that session reads **abandoned**, and its photographs
+      are gone — not waiting for the end of the day.
+- [ ] Do it again and **touch the screen** when the warning appears. It should
+      go away and leave you where you were.
+- [ ] Start a capture and stand perfectly still for the whole thirty seconds
+      without touching anything. **It must not time out.** Holding still is
+      the task; a timeout there would be firing on success.
+
+## 9. The operator view
 
 - [ ] Operator → the tiles have real numbers, and the verdict says
       **Still running** with the weeks and sessions so far.
@@ -102,7 +134,7 @@ operator screen under "Image quality and what the model could see".
 - [ ] Export CSV. **Open it.** Confirm there is no phone number, no name, no
       image, and one row per session.
 
-## 8. The things to deliberately break
+## 10. The things to deliberately break
 
 - [ ] Walk away at the review screen without choosing. Reload the page.
       Those photos should be gone — nothing unkept survives.
@@ -113,7 +145,7 @@ operator screen under "Image quality and what the model could see".
 
 ---
 
-## 9. The camera
+## 11. The camera
 
 - [ ] Plug in or connect the camera you actually intend to use — phone over
       Continuity Camera or DroidCam, or a mirrorless in webcam mode.
@@ -124,7 +156,7 @@ operator screen under "Image quality and what the model could see".
 - [ ] Run one session on each camera and compare keep rate and confidence in
       the operator screen's quality table.
 
-## 10. Demo data, and getting rid of it
+## 12. Demo data, and getting rid of it
 
 - [ ] Everything so far is **DEMO** — orange ribbon at the top of every screen,
       `demo` tag on the dashboard tiles and rows.
