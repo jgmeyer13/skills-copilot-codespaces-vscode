@@ -19,7 +19,7 @@
  * records which ones the member kept.
  */
 
-import { createSelector, motionBetween } from './scoring.js'
+import { createSelector, motionBetween, features } from './scoring.js'
 
 export const CAPTURE_FPS = 15
 
@@ -37,6 +37,13 @@ export function createCapture({ video, pose, steps, onTick, onStep, mirrored = t
 
   const selectors = new Map(steps.map((s) => [s.id, createSelector(s)]))
   const total = steps.reduce((n, s) => n + s.seconds, 0)
+
+  // How well the model could see, averaged over every evaluated frame. One
+  // hard top light on a dark background is the look the product is selling and
+  // also the condition most likely to break pose detection, so this is the
+  // number that tells you whether the two are compatible.
+  let confidenceSum = 0
+  let confidenceCount = 0
 
   let raf = 0
   let startedAt = 0
@@ -94,7 +101,29 @@ export function createCapture({ video, pose, steps, onTick, onStep, mirrored = t
         const dt = Math.max(1 / 60, (now - prevT) / 1000)
         const motion = motionBetween(prevPeople, people, dt)
         const selector = selectors.get(at.step.id)
-        const score = selector.consider(people, motion, now, () => grabInto(holds.get(at.step.id)))
+        const hold = holds.get(at.step.id)
+        const score = selector.consider(people, motion, now, () => grabInto(hold))
+
+        /*
+         * Never leave a step empty.
+         *
+         * The first frame of a session has no previous frame, so its motion is
+         * unknown and a held pose scores zero — correctly, because unknown
+         * must not beat holding. But if that is the only frame a step gets to
+         * evaluate, nothing ever beats zero and the step produces no
+         * photograph at all. The member then silently receives four pictures
+         * instead of five, having stood there for all thirty seconds.
+         *
+         * So the first evaluation of every step is always captured, and
+         * anything better replaces it. A weak frame is worth having; a missing
+         * one is not.
+         */
+        if (!hold.has) grabInto(hold)
+
+        for (const lm of people) {
+          confidenceSum += features(lm).confidence
+          confidenceCount += 1
+        }
         onTick?.({
           step: at.step,
           into: at.into,
@@ -141,7 +170,10 @@ export function createCapture({ video, pose, steps, onTick, onStep, mirrored = t
       hold.canvas.height = 1
       hold.has = false
     }
-    resolveRun?.(results)
+    resolveRun?.({
+      frames: results,
+      meanConfidence: confidenceCount ? confidenceSum / confidenceCount : null,
+    })
   }
 
   return {
@@ -161,7 +193,7 @@ export function createCapture({ video, pose, steps, onTick, onStep, mirrored = t
       stopped = true
       cancelAnimationFrame(raf)
       for (const hold of holds.values()) { hold.canvas.width = 1; hold.canvas.height = 1; hold.has = false }
-      resolveRun?.([])
+      resolveRun?.({ frames: [], meanConfidence: null })
     },
   }
 }

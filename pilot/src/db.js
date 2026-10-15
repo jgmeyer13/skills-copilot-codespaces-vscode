@@ -74,12 +74,19 @@ const del = (store, key) => tx(store, 'readwrite', (s) => s.delete(key))
 /**
  * A phone number becomes a lookup key and nothing else.
  *
- * SHA-256 over a salt and the normalised number. The same number always gives
- * the same key, so a returning member is recognised; the number itself is
- * never written down, so there is nothing to leak and nothing to misuse for
- * marketing later. The salt lives in config.json and must be changed before
- * the pilot — without it, a short national number space is small enough to
- * walk through exhaustively.
+ * SHA-256 over a salt and the normalised number, so the same number always
+ * gives the same key and a returning member is recognised without the number
+ * being written down.
+ *
+ * Be clear about what this is and is not. South African mobile numbers are a
+ * space of roughly 100 million, and the salt sits on the same laptop as the
+ * hashes — anyone holding the device can walk the whole space in seconds and
+ * recover every number. This is PSEUDONYMISATION, not anonymisation: the
+ * records stay personal information under POPIA, and the consent text must not
+ * claim they are unreadable.
+ *
+ * `memberIdMode: 'code'` in config.json avoids the problem entirely by never
+ * deriving the key from anything about the person. See RISKS-POPIA.md risk 1a.
  */
 export async function memberKeyFor(phone, salt) {
   const normalised = normalisePhone(phone)
@@ -87,6 +94,26 @@ export async function memberKeyFor(phone, salt) {
   const bytes = new TextEncoder().encode(`${salt}:${normalised}`)
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   return [...new Uint8Array(digest)].slice(0, 12).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * A random member code: about 2 billion possibilities, no personal information
+ * in it at all. Ambiguous characters are left out because a member reads this
+ * off a phone screen and types it back a month later.
+ */
+const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
+
+export function newMemberCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(6))
+  const chars = [...bytes].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length])
+  return `${chars.slice(0, 3).join('')}-${chars.slice(3).join('')}`
+}
+
+/** The code *is* the key — nothing is derived, so nothing can be reversed. */
+export function memberKeyForCode(code) {
+  const cleaned = String(code || '').toUpperCase().replace(/[^0-9A-Z]/g, '')
+  if (cleaned.length !== 6) return null
+  return `c_${cleaned}`
 }
 
 /** South African numbers, written the four ways people actually write them. */
@@ -184,6 +211,53 @@ export async function recordConsent(record) {
 
 export async function listConsents() {
   return all('consents')
+}
+
+// ── demo data and the real-pilot gate ──────────────────────────────────────
+
+/*
+ * Everything recorded before the operator presses "Start real pilot" is marked
+ * demo: true and is shown as DEMO everywhere it appears. The gate exists
+ * because a seeded dashboard looks exactly like a real one, and a number that
+ * came from a fixture has a way of ending up in a pitch deck six weeks later.
+ */
+
+export async function pilotState() {
+  const startedAt = await getMeta('pilotStartedAt')
+  const rows = await all('sessions')
+  return {
+    started: !!startedAt,
+    startedAt: startedAt ?? null,
+    demoSessions: rows.filter((r) => r.demo).length,
+    realSessions: rows.filter((r) => !r.demo).length,
+  }
+}
+
+/** Deletes every demo session, frame and member. Irreversible, deliberately. */
+export async function wipeDemo() {
+  const sessions = (await all('sessions')).filter((s) => s.demo)
+  const frames = (await all('frames')).filter((f) => f.demo)
+  const members = (await all('members')).filter((m) => m.demo)
+  await Promise.all([
+    ...sessions.map((r) => del('sessions', r.id)),
+    ...frames.map((r) => del('frames', r.id)),
+    ...members.map((r) => del('members', r.memberKey)),
+  ])
+  return { sessions: sessions.length, frames: frames.length, members: members.length }
+}
+
+/**
+ * Wipes the demo data and opens the real pilot. Refuses if anything demo
+ * survives the wipe, so "the pilot started" can never be true while fixture
+ * rows are still in the dashboard.
+ */
+export async function startRealPilot() {
+  const wiped = await wipeDemo()
+  const left = (await all('sessions')).filter((s) => s.demo).length
+  if (left) throw new Error(`${left} demo session(s) survived the wipe — not starting`)
+  const at = Date.now()
+  await setMeta('pilotStartedAt', at)
+  return { ...wiped, startedAt: at }
 }
 
 // ── meta ───────────────────────────────────────────────────────────────────

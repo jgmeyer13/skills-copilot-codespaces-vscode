@@ -30,7 +30,26 @@ above and slightly in front of you, everything else off, a dark wall behind.
 - [ ] The consent screen shows about seven cards, in English you'd actually say.
 - [ ] **Continue is dead until you tick the first two.** The third stays optional.
 
-## 2. The model sees you ← the one that matters
+## 2. The model sees you, under the real light ← the one that matters
+
+**Set the room up exactly as it will be for members before this step**: one
+hard top light, everything else off, dark background, curtain closed. Testing
+pose detection under office lighting proves nothing — the look the product
+sells is the condition most likely to break the model, and if those two are
+incompatible you need to know today rather than in week three.
+
+Run it twice, **solo and with three people**, and write down the mean
+confidence the dashboard reports for each session. Confidence is on the
+operator screen under "Image quality and what the model could see".
+
+- [ ] Solo, under the real light: skeleton tracks you, confidence recorded.
+- [ ] Three people, under the real light: all three tracked, confidence recorded.
+- [ ] **If confidence drops below about 0.6 under the real light**, say so —
+      the fix is more light on the subject or a less extreme look, and that is
+      a product decision, not a bug.
+- [ ] Compare against the same two runs under normal room light. If the dark
+      setup is much worse, that difference is the finding.
+
 
 - [ ] After Continue, the camera starts and within a few seconds a **green
       skeleton** tracks you. If it does not, stop and tell me — nothing else
@@ -94,8 +113,37 @@ above and slightly in front of you, everything else off, a dark wall behind.
 
 ---
 
+## 9. The camera
+
+- [ ] Plug in or connect the camera you actually intend to use — phone over
+      Continuity Camera or DroidCam, or a mirrorless in webcam mode.
+- [ ] On the mirror screen, the picker lists it. Switch to it.
+- [ ] The resolution beside the picker reads what you expect. If it says
+      1280×720 on a 4K phone, the browser refused — try another connection
+      method before settling.
+- [ ] Run one session on each camera and compare keep rate and confidence in
+      the operator screen's quality table.
+
+## 10. Demo data, and getting rid of it
+
+- [ ] Everything so far is **DEMO** — orange ribbon at the top of every screen,
+      `demo` tag on the dashboard tiles and rows.
+- [ ] Operator → **Start real pilot** → confirm. Every demo session and photo
+      is deleted and the ribbon disappears.
+- [ ] Check the dashboard reads 0 sessions.
+- [ ] Export the CSV once more and confirm no row says DEMO.
+
+**Do this immediately before the first real member, not the night before.**
+Anything you test afterwards lands in the real data.
+
 ## Before the first real member
 
+- [ ] **Decide the identity mode.** `memberIdMode` in `config.json`:
+      `phone-hash` is convenient and keeps you in POPIA scope (the hash is
+      reversible from this laptop — see risk 1); `code` gives the member a
+      random code to keep and stores nothing derived from them. If you pick
+      `code`, the "What we keep about you" section of the consent text needs
+      rewriting to match.
 - [ ] Change `phoneSalt` in `config.json` to something long and random.
 - [ ] Fill in the three `CHANGE-ME` contacts in `config.json`.
 - [ ] Have someone read `consent/consent.en.md` who knows POPIA, and
@@ -106,6 +154,9 @@ above and slightly in front of you, everything else off, a dark wall behind.
       against the membership list?
 - [ ] Read `DECISIONS.md` and change any threshold you disagree with — **now,
       not after the data arrives.**
+- [ ] Write the Afrikaans consent text into `consent/consent.af.md` and have it
+      checked by the same person who reviews the English. Until then the
+      toggle shows it as a draft and tells the member to switch to English.
 
 ## Tell me
 

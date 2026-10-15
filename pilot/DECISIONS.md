@@ -56,12 +56,16 @@ Run longer if you can. Six weeks roughly doubles the cohort.
 |---|---|---|---|
 | **Return within 14 days** | ≥ 30% | 15–30% | Of first-timers who have had 14 days, the share who came back at least once. Above 30% it is entering routines. Below 15% it is a novelty people tried once. |
 | **Keep rate** | ≥ 55% | 35–55% | Share of completed sessions where the member kept at least one photo. If most people walk away from free photographs of themselves, the output is not good enough and nothing else matters. |
-| **Squad share** | ≥ 25% | — | Share of sessions with two or three people. Above a quarter, squad mode is a mode and not an edge case, and the second version should be built around it. |
 
-**All three at Go** → build it properly.
-**Any at No** → do not build hardware. Fix the thing that failed and re-run.
+**Both at Go** → build it properly.
+**Either at No** → do not build hardware. Fix the thing that failed and re-run.
 **Mixed** → the honest answer is another four weeks with one variable changed,
 not a decision.
+
+Squad share used to be a third go/no-go rule. It is not one, and treating it as
+one was a mistake: a low squad share is a reason to **build the solo product
+first**, never a reason not to build. It has moved to the next section, where
+it belongs.
 
 ### Which product is it
 
@@ -73,6 +77,18 @@ frame** — the plain front-on shot that lines up with their next visit.
 | ≥ 45% | **Instrument.** People want the record. Build history, trends, the second visit. |
 | 20–45% | **Both.** Keep producing both frames. The light stays fixed; looks come later as an option on top, never instead. |
 | ≤ 20% | **Photo booth.** They are here for the post. Drop the measurement discipline, add looks and squad mode, and price it per use — but know that novelty decays and plan for it. |
+
+Members are never told which frame is the comparison one. The review screen
+shows five unlabelled photographs in random order, and the third consent tick
+says only "so I can see them next visit". An interface that explains the
+measurement to the person being measured has destroyed it.
+
+### And what to build it for: squad share
+
+| Squad share | What it means |
+|---|---|
+| ≥ 25% | Groups are a mode, not an edge case. Build the second version around three people: wider frame, three marks, a group cue script. |
+| < 25% | Build the solo product properly first. **Not a reason to stop** — it is a sequencing answer. |
 
 ### Throughput, which decides the pod count
 
@@ -109,6 +125,16 @@ member, so they reach useful precision sooner — around ±9pp at 120 sessions.
 
 - **No stopping early because the numbers look good.** The decision is made at
   the end of week four, or at 120 sessions, whichever is later.
+- **The dashboard enforces this.** While the pilot runs it shows raw counts and
+  nothing else — no pass marks, no verdict, no reading of which product it is.
+  It unseals itself when both end conditions are met. An earlier version
+  displayed "reads as an instrument" from the first session, which is exactly
+  the peeking this section exists to prevent; the dashboard was breaking the
+  rules the dashboard was supposed to enforce.
+- **Nothing recorded before "Start real pilot" counts.** Demo sessions are
+  marked DEMO on every screen and in the CSV, and starting the real pilot
+  deletes them. The member flow refuses to record real sessions while demo rows
+  remain.
 - **One change at a time.** If you change the light, the price, the script or
   the poses mid-pilot, the metric it affects restarts from that date and you
   say so in the log.
@@ -122,6 +148,11 @@ member, so they reach useful precision sooner — around ±9pp at 120 sessions.
 
 Written down so nobody claims it later:
 
+- **Image quality.** The pilot runs on whatever camera is in the room and logs
+  the resolution and the mean pose-detection confidence per session, so keep
+  rate can be read against both. That is a signal, not an experiment: it will
+  not tell you how much quality is worth, only whether the dark look is
+  breaking the capture.
 - **Price.** R20 is a test price, not a tested one. You cannot read willingness
   to pay from one price point.
 - **The four looks.** The pilot runs one fixed light on purpose. Which of

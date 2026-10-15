@@ -21,6 +21,18 @@
       standard in the section 1 definition of consent, in a gym, at the till.
     - Whether the under-18 position (s 34) needs more than a self-declaration.
 
+  CORRECTED: an earlier draft said the scrambled number could not be read back
+  by anybody, including us. That was wrong and it mattered, because it was a
+  promise a member was agreeing to. South African mobile numbers are a space of
+  roughly 100 million and the scrambling key sits on the same laptop, so anyone
+  holding the device can recover every number in seconds. The text now says so.
+
+  IF YOU SWITCH memberIdMode TO 'code' in config.json, replace the "What we
+  keep about you" section: there is then no phone number involved at all, the
+  member keeps a random code on their phone, and nothing stored is derived from
+  them. That version is easier to defend and loses the member their history if
+  they lose the code.
+
   EDITING: change the text freely. The headings marked {{...}} are filled in
   from config.json at runtime — leave those alone or they will print literally.
   Each `## ` heading becomes one card on the consent screen. The three
@@ -59,9 +71,16 @@ store on this laptop:
 - an outline of your body position, so we can show you where to stand next time
 - a **scrambled version of your phone number** — not the number itself
 
-We scramble the number so the laptop can recognise you on your next visit
-without ever holding the number. Nobody can read it back, including us, and we
-cannot use it to contact you.
+We scramble it so the laptop can recognise you next time without writing the
+number down. **It is not a perfect disguise.** Someone who had this laptop and
+wanted to badly enough could work the numbers back out, because there are only
+so many phone numbers in South Africa. So we treat it as information about you,
+not as anonymous: it is deleted when your photographs are, and we never use it
+to contact you.
+
+If you would rather we held nothing derived from you at all, ask — we can give
+you a random code to keep on your phone instead, and then there is nothing on
+this laptop that came from you.
 
 If you choose **Send and wipe**, we keep none of that. The photographs are
 deleted from this laptop immediately.

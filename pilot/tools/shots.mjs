@@ -63,7 +63,7 @@ await page.evaluate(async () => {
     const keptAny = rnd() < 0.62
     const measurement = keptAny && rnd() < 0.5 ? 1 : 0
     rows.push({
-      id: 'seed_' + i, startedAt: at, endedAt: at + (120000 + rnd() * 180000),
+      id: 'seed_' + i, demo: true, startedAt: at, endedAt: at + (120000 + rnd() * 180000),
       memberKey: 'm' + Math.floor(rnd() * 44), isReturning: rnd() < 0.34,
       people: squad ? (rnd() < 0.5 ? 2 : 3) : 1, squad, queueAtStart: Math.floor(rnd() * 4),
       keepsHistory: true, retakes: rnd() < 0.2 ? 1 : 0,
@@ -71,6 +71,7 @@ await page.evaluate(async () => {
       kept: { measurement, post: keptAny ? 1 + Math.floor(rnd() * 2) : 0, candid: keptAny && rnd() < 0.6 ? 1 : 0 },
       shared: { measurement: 0, post: rnd() < 0.4 ? 1 : 0, candid: rnd() < 0.3 ? 1 : 0 },
       framesProduced: 5, meanScore: 0.7 + rnd() * 0.25,
+      captureWidth: rnd() < 0.5 ? 1920 : 3840, captureHeight: 1080, meanConfidence: 0.62 + rnd() * 0.3,
     })
   }
   await window.__pilot.seedSessions(rows)
