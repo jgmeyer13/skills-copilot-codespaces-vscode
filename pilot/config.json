@@ -68,16 +68,37 @@
   },
 
   "capture": {
-    "_comment": "The 30 seconds, as a script. Each step names the frame it is trying to produce. The member never sees these labels — see the note on the review screen in app.js.",
+    "_comment": "The 30 seconds, as a script. Two sets, chosen by the member before recording. The progress shot is deliberately IDENTICAL in both — it is the frame that has to line up with the same person's next visit, so it cannot depend on which set they picked that day.",
     "totalSeconds": 30,
     "maxPeople": 3,
-    "steps": [
-      { "id": "measure", "kind": "measurement", "pose": "front_relaxed", "seconds": 7, "title": "Stand on the mark", "cue": "Arms relaxed by your side, feet on the ring, look at the camera." },
-      { "id": "pose1", "kind": "post", "pose": "front_double_bicep", "seconds": 7, "title": "Front double bicep", "cue": "Arms up and out, wrists curled in. Breathe out." },
-      { "id": "pose2", "kind": "post", "pose": "side_chest", "seconds": 6, "title": "Side chest", "cue": "Turn to your right. Near arm across, press the chest forward." },
-      { "id": "pose3", "kind": "post", "pose": "back_double_bicep", "seconds": 6, "title": "Back double bicep", "cue": "Turn around. Elbows up, squeeze the shoulder blades." },
-      { "id": "candid", "kind": "candid", "pose": "any", "seconds": 4, "title": "However you like", "cue": "Move. Mess about. This one is for the post." }
-    ]
+
+    "_progressShot": "Shown to the member as 'Progress shot — same spot, same light, every time.' It is labelled now. An earlier version hid which frame this was, on the reasoning that an interface explaining the measurement to its subject destroys it. That was overruled deliberately: see DECISIONS.md, which records what the keep-rate thresholds now mean as a result.",
+
+    "defaultSet": "physique",
+    "sets": {
+      "physique": {
+        "label": "Physique",
+        "blurb": "Front double biceps, side chest, back double biceps",
+        "steps": [
+          { "id": "measure", "kind": "measurement", "pose": "front_relaxed", "seconds": 7, "title": "Stand on the mark", "cue": "Arms relaxed by your side, feet on the ring, look at the camera." },
+          { "id": "pose1", "kind": "post", "pose": "front_double_bicep", "seconds": 7, "title": "Front double biceps", "cue": "Arms up and out, wrists curled in. Breathe out." },
+          { "id": "pose2", "kind": "post", "pose": "side_chest", "seconds": 6, "title": "Side chest", "cue": "Turn to your right. Near arm across, press the chest forward." },
+          { "id": "pose3", "kind": "post", "pose": "back_double_bicep", "seconds": 6, "title": "Back double biceps", "cue": "Turn around. Elbows up, squeeze the shoulder blades." },
+          { "id": "candid", "kind": "candid", "pose": "any", "seconds": 4, "title": "However you like", "cue": "Move. Mess about. This one is for the post." }
+        ]
+      },
+      "athlete": {
+        "label": "Athlete",
+        "blurb": "Relaxed front, relaxed side, race-ready stance",
+        "steps": [
+          { "id": "measure", "kind": "measurement", "pose": "front_relaxed", "seconds": 7, "title": "Stand on the mark", "cue": "Arms relaxed by your side, feet on the ring, look at the camera." },
+          { "id": "pose1", "kind": "post", "pose": "front_relaxed", "seconds": 7, "title": "Relaxed front", "cue": "Stand tall, arms by your side, shoulders down." },
+          { "id": "pose2", "kind": "post", "pose": "side_relaxed", "seconds": 6, "title": "Relaxed side", "cue": "Turn to your right. Arms by your side, stand tall." },
+          { "id": "pose3", "kind": "post", "pose": "race_ready", "seconds": 6, "title": "Race ready", "cue": "One foot forward, lean in, like the gun is about to go." },
+          { "id": "candid", "kind": "candid", "pose": "any", "seconds": 4, "title": "However you like", "cue": "Move. Mess about. This one is for the post." }
+        ]
+      }
+    }
   },
 
   "light": {
@@ -99,7 +120,8 @@
 
     "whichProduct": {
       "_comment": "What to build, not whether. Squad share lives here: a low squad share is not a reason to stop, it is a reason to build the solo product first.",
-      "measurementKeptShare": { "instrument": 0.45, "photobooth": 0.2 },
+      "_measurementKeptShare": "Raised from 0.45/0.2 when the progress shot became labelled. The old numbers were set for an unlabelled frame in a shuffled order, where keeping it was an unprompted choice. A labelled option should clear a higher bar before it counts as evidence. See DECISIONS.md.",
+      "measurementKeptShare": { "instrument": 0.6, "photobooth": 0.3 },
       "squadShare": { "buildFor": 0.25 }
     },
 

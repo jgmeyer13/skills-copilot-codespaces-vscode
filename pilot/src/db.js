@@ -178,6 +178,19 @@ export async function setFrameKept(id, kept) {
   return frame
 }
 
+/*
+ * Sending and keeping are independent, so they are stored independently.
+ * A frame marked sent but not kept goes to the member's phone and is then
+ * deleted from this laptop at the end of the session.
+ */
+export async function setFrameSent(id, sent) {
+  const frame = await get('frames', id)
+  if (!frame) return null
+  frame.sent = sent
+  await put('frames', frame)
+  return frame
+}
+
 export async function deleteFrame(id) {
   return del('frames', id)
 }

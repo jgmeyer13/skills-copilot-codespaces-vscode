@@ -78,10 +78,36 @@ frame** — the plain front-on shot that lines up with their next visit.
 | 20–45% | **Both.** Keep producing both frames. The light stays fixed; looks come later as an option on top, never instead. |
 | ≤ 20% | **Photo booth.** They are here for the post. Drop the measurement discipline, add looks and squad mode, and price it per use — but know that novelty decays and plan for it. |
 
-Members are never told which frame is the comparison one. The review screen
-shows five unlabelled photographs in random order, and the third consent tick
-says only "so I can see them next visit". An interface that explains the
-measurement to the person being measured has destroyed it.
+**This changed, and the number changed meaning with it.**
+
+The review screen used to show five unlabelled photographs in random order, so
+that keeping the comparison frame was an unprompted choice. It now shows them
+in a fixed order with the first one labelled *"Progress shot — same spot, same
+light, every time."*
+
+That was a deliberate decision, not a drift, and it has a cost worth writing
+down: the number above no longer measures "did they want the record" — it
+measures "did they want the record once we told them which one it was". Those
+are different quantities and the second is the easier one to score well on.
+
+So the thresholds move up, because a labelled option should clear a higher bar
+than an unlabelled one before it counts as evidence:
+
+| Progress shot kept by | Reading |
+|---|---|
+| ≥ 60% | **Instrument.** |
+| 30–60% | **Both.** |
+| ≤ 30% | **Photo booth.** |
+
+These are a judgement, not an arithmetic conversion of the old ones — there is
+no honest way to convert between a prompted and an unprompted rate without
+running both. If that matters to the decision, the pilot should run a fortnight
+of each rather than pick the reading that suits.
+
+**Sending and keeping are now separate**, which gives a second number the old
+design could not produce: the share of members who sent a photograph to their
+phone but kept nothing on the laptop. That is the photo-booth case stated
+directly, and it is worth watching alongside the table above.
 
 ### And what to build it for: squad share
 
