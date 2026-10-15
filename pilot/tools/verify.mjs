@@ -114,8 +114,37 @@ async function identify(page, who) {
 }
 
 /** One member, from the attract screen to a closed session row. */
+
+/**
+ * A click that reports where the app actually was when it failed.
+ *
+ * "locator.click: Timeout 30000ms exceeded" is true and useless: it never
+ * says which screen was showing, which is the one fact that identifies the
+ * bug. Every failure in this file that cost an entire run to diagnose was
+ * this message.
+ */
+async function tap(page, selector, note = '') {
+  try {
+    await page.locator(selector).click({ timeout: 15_000 })
+  } catch {
+    const where = await page.evaluate(() => ({
+      screen: document.getElementById('app')?.dataset.screen,
+      banner: document.getElementById('banner')?.hidden === false
+        ? document.getElementById('banner').textContent : null,
+      sheet: document.getElementById('forget-sheet')?.hidden === false,
+      idle: document.getElementById('idle-warning')?.hidden === false,
+    })).catch(() => ({}))
+    const vis = await page.locator(selector).isVisible().catch(() => 'unknown')
+    throw new Error(
+      `could not click ${selector}${note ? ` (${note})` : ''} — screen was "${where.screen}", ` +
+        `visible: ${vis}, sheet open: ${where.sheet}, idle warning: ${where.idle}` +
+        (where.banner ? `, banner: "${where.banner}"` : ''),
+    )
+  }
+}
+
 async function runSession(page, { who, people = 1, keepHistory = true, stream, keep = ['measurement', 'post'], wipe = false, seconds, stopAtReview = false }) {
-  await page.locator('#start').click()
+  await tap(page, '#start', `starting a session for ${who}`)
   await identify(page, who)
   await page.locator('#tick-age').check()
   await page.locator('#tick-record').check()
@@ -323,7 +352,7 @@ console.log(`\npilot end to end\n`)
     if (!(await page.locator('#compare').isVisible())) throw new Error('side by side is not the default')
     if (await page.locator('#wipe-view').isVisible()) throw new Error('the wipe view is showing first')
 
-    await page.locator('#view-wipe').click()
+    await tap(page, '#view-wipe')
     if (!(await page.locator('#wipe-view').isVisible())) throw new Error('the wipe view never appeared')
     if (await page.locator('#compare').isVisible()) throw new Error('both views are showing at once')
 
@@ -350,10 +379,10 @@ console.log(`\npilot end to end\n`)
       throw new Error(`the images are different sizes mid-wipe: ${sizes.then} vs ${sizes.now}`)
     }
 
-    await page.locator('#view-side').click()
+    await tap(page, '#view-side')
     if (!(await page.locator('#compare').isVisible())) throw new Error('cannot get back to side by side')
 
-    await page.locator('#compare-done').click()
+    await tap(page, '#compare-done')
     await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'attract', null, { timeout: 20_000 })
     return 'side by side by default, wipe on request, both images loaded, slider drives the clip'
   })
@@ -377,7 +406,7 @@ console.log(`\npilot end to end\n`)
 
     await page.evaluate(() => window.__pilot.show('dashboard'))
     page.once('dialog', (d) => d.accept(who))
-    await page.locator('#forget-member').click()
+    await tap(page, '#forget-member')
     try {
       await page.waitForSelector('#forget-sheet:not([hidden])', { timeout: 10_000 })
     } catch (e) {
@@ -388,7 +417,7 @@ console.log(`\npilot end to end\n`)
     const offered = await page.locator('#forget-body').innerText()
     if (!/photograph/i.test(offered)) throw new Error('the sheet does not say what is about to go')
 
-    await page.locator('#forget-go').click()
+    await tap(page, '#forget-go')
     try {
       // state: 'attached' matters — the default is 'visible', and a hidden
       // element is never visible, so the default times out on success.
