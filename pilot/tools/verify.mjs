@@ -102,6 +102,9 @@ async function openPage(browser) {
   await page.addInitScript(() => { window.open = () => null })
   await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' })
   await page.waitForFunction(() => !!window.__pilot, null, { timeout: 30_000 })
+  // The watchdog is tested on its own; armed here it would reset the app
+  // mid-suite and every later failure would be a phantom.
+  await page.evaluate(() => window.__pilot.setIdle(false))
   return { context, page, errors }
 }
 
@@ -147,52 +150,63 @@ async function tap(page, selector, note = '') {
       screen: document.getElementById('app')?.dataset.screen,
       banner: document.getElementById('banner')?.hidden === false
         ? document.getElementById('banner').textContent : null,
-      sheet: document.getElementById('forget-sheet')?.hidden === false,
+      overlays: ['forget-sheet', 'consent-sheet', 'code-sheet', 'preroll', 'idle-warning']
+        .filter((id) => document.getElementById(id)?.hidden === false),
       idle: document.getElementById('idle-warning')?.hidden === false,
     })).catch(() => ({}))
     const vis = await page.locator(selector).isVisible().catch(() => 'unknown')
     throw new Error(
       `could not click ${selector}${note ? ` (${note})` : ''} — screen was "${where.screen}", ` +
-        `visible: ${vis}, sheet open: ${where.sheet}, idle warning: ${where.idle}` +
+        `visible: ${vis}, overlays open: ${(where.overlays ?? []).join(', ') || 'none'}` +
         (where.banner ? `, banner: "${where.banner}"` : ''),
     )
   }
 }
 
-async function runSession(page, { who, people = 1, keepHistory = true, stream, keep = ['measurement', 'post'], wipe = false, seconds, stopAtReview = false }) {
+async function runSession(page, { who, people = 1, keepHistory = true, poseSet = 'physique', stream, keep = ['measurement', 'post'], send = [], wipe = false, seconds, stopAtReview = false }) {
   await tap(page, '#start', `starting a session for ${who}`)
   await identify(page, who)
-  await page.locator('#tick-age').check()
-  await page.locator('#tick-record').check()
-  if (keepHistory) await page.locator('#tick-keep').check()
-  else await page.locator('#tick-keep').uncheck()
+  // One button now. Keeping a history is no longer consented to up front —
+  // the member decides it per photograph on the review screen.
   await page.locator('#consent-next').click()
+  await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'poseset', null, { timeout: 15_000 })
+  await page.locator(`#setpick button[data-set="${poseSet}"]`).click()
   await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'ready', null, { timeout: 60_000 })
 
   await page.evaluate((s) => window.__pilot.useReplay(s), stream)
   if (people > 1) await page.locator('#people-pick button').nth(people - 1).click()
 
+  await page.evaluate(() => { window.__pilot.config.capture.prerollSeconds = 0 })
   await page.locator('#begin').click()
   await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'review', null, { timeout: (seconds + 30) * 1000 })
 
   if (stopAtReview) return
-  if (wipe) {
-    await page.locator('#wipe-all').click()
-    await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'attract', null, { timeout: 20_000 })
-    return
+
+  // Keeping and sending are separate decisions now, so the harness makes them
+  // separately. A wipe is simply keeping nothing: Done deletes the rest.
+  if (!wipe) {
+    for (const kind of keep) {
+      const cards = page.locator(`.frame-card[data-kind="${kind}"]`)
+      for (let i = 0; i < (await cards.count()); i++) await cards.nth(i).locator('[data-act="keep"]').click()
+    }
+    for (const kind of send) {
+      const cards = page.locator(`.frame-card[data-kind="${kind}"]`)
+      for (let i = 0; i < (await cards.count()); i++) await cards.nth(i).locator('[data-act="send"]').click()
+    }
   }
-  // The member sees no labels, so the test picks by the hidden data attribute.
-  for (const kind of keep) {
-    const cards = page.locator(`.frame-card[data-kind="${kind}"]`)
-    const n = await cards.count()
-    for (let i = 0; i < n; i++) await cards.nth(i).locator('.frame-toggle').click()
-  }
-  await page.locator('#keep-done').click()
+
+  await page.locator('#review-done').click()
+  await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'done', null, { timeout: 20_000 })
+  await page.locator('#done-skip').click()
   await page.waitForFunction(
     () => ['attract', 'compare'].includes(document.getElementById('app').dataset.screen),
     null,
     { timeout: 20_000 },
   )
+  if (await page.locator('#compare-done').isVisible()) {
+    await page.locator('#compare-done').click()
+    await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'attract', null, { timeout: 20_000 })
+  }
 }
 
 console.log(`\npilot end to end\n`)
@@ -228,30 +242,107 @@ console.log(`\npilot end to end\n`)
     const labels = await page.locator('#langs button').allTextContents()
     if (labels.length !== 2) throw new Error(`${labels.length} languages`)
     await page.locator('#langs button').nth(1).click()
+    await page.locator('#consent-more').click()
+    await page.waitForSelector('#consent-sheet:not([hidden])', { timeout: 5000 })
     const af = await page.locator('#consent-body').innerText()
+    await page.locator('#consent-close').click()
     if (!/nog nie vertaal|not been written/i.test(af)) throw new Error('the Afrikaans slot did not load')
     await page.locator('#langs button').nth(0).click()
     return labels.join(' / ')
   })
 
-  await step('the third tick no longer nudges', async () => {
-    const label = await page.locator('#tick-keep-label').innerText()
-    if (/compare|comparison|progress|measure/i.test(label)) throw new Error(`reads "${label.split('\n')[0]}"`)
-    return `"${label.split('\n')[0]}"`
+  await step('the consent screen is three lines and one button', async () => {
+    const lines = await page.locator('#consent-lines li').allTextContents()
+    if (lines.length !== 3) throw new Error(`${lines.length} lines`)
+    const joined = lines.join(' ')
+    if (!/never saved/i.test(joined)) throw new Error('it does not say the video is never saved')
+    if (!/deleted/i.test(joined)) throw new Error('it does not say the rest is deleted')
+    if (!/nothing leaves this laptop/i.test(joined)) throw new Error('it does not say nothing leaves the laptop')
+    return lines.map((l) => `"${l.slice(0, 34)}…"`).join(' ')
   })
 
-  await step('continuing is blocked until the two required ticks are made', async () => {
-    if (!(await page.locator('#consent-next').isDisabled())) throw new Error('enabled with nothing ticked')
-    await page.locator('#tick-age').check()
-    if (!(await page.locator('#consent-next').isDisabled())) throw new Error('enabled with only age ticked')
-    await page.locator('#tick-record').check()
-    if (await page.locator('#consent-next').isDisabled()) throw new Error('still disabled with both ticked')
-    return 'age and recording required; keeping photos optional'
+  await step('the age gate survived losing its tick box', async () => {
+    // The brief specified one button and no separate age confirmation. Under
+    // 18 is the one mistake in this pilot with no cure, so the confirmation
+    // moved onto the button's own words rather than disappearing.
+    const label = await page.locator('#consent-next').innerText()
+    if (!/18 or older/i.test(label)) throw new Error(`the button reads "${label}" — nothing confirms age`)
+    if (await page.locator('#consent-next').isDisabled()) throw new Error('the single button is disabled')
+    return `"${label}"`
+  })
+
+  await step('the full text is still one tap away', async () => {
+    await tap(page, '#consent-more', 'opening the longer version')
+    await page.waitForSelector('#consent-sheet:not([hidden])', { timeout: 5000 })
+    const body = await page.locator('#consent-body').innerText()
+    if (body.length < 400) throw new Error('the long version is missing or empty')
+    await page.locator('#consent-close').click()
+    return `${body.length} characters behind "The longer version"`
+  })
+
+  await step('every control on every screen is inside the viewport', async () => {
+    /*
+     * Three separate bugs in this project were the same bug: a button that
+     * was present, visible, enabled — and physically off the screen, so
+     * nobody could press it. The wipe view pushed its own exits off the
+     * bottom; taller frame cards slid under the action row; the consent sheet
+     * grew past the screen and took its own Close button with it.
+     *
+     * Visibility checks catch none of those, because the elements ARE
+     * visible. Only position catches them, so position is what this asserts,
+     * on every screen, at a phone height as well as a laptop one.
+     */
+    const SCREENS = ['attract', 'checkin', 'consent', 'poseset', 'review', 'done', 'dashboard', 'compare']
+    const problems = []
+
+    for (const size of [{ width: 1280, height: 900 }, { width: 900, height: 620 }]) {
+      await page.setViewportSize(size)
+      for (const screen of SCREENS) {
+        await page.evaluate((sc) => window.__pilot.show(sc), screen)
+        if (screen === 'consent') await page.evaluate(() => { document.getElementById('consent-sheet').hidden = false })
+        await page.waitForTimeout(120)
+        const bad = await page.evaluate((sc) => {
+          /*
+           * The question is not "is it on screen" — it is "can a person get
+           * to it". A control below the fold inside a scrolling panel is
+           * perfectly reachable; one in a panel that cannot scroll is not,
+           * and the two look identical until you try to scroll to it.
+           *
+           * So: scroll it into view, then measure. That is what a browser
+           * does for a real click, and the only version of this check that
+           * does not fire on every long page.
+           */
+          const out = []
+          const scope = sc === 'consent'
+            ? document.querySelectorAll('#consent-sheet button')
+            : document.querySelectorAll(`.screen[data-id="${sc}"] button, .screen[data-id="${sc}"] a`)
+          for (const el of scope) {
+            const first = el.getBoundingClientRect()
+            if (first.width === 0 && first.height === 0) continue
+            if (getComputedStyle(el).visibility === 'hidden') continue
+            el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+            const r = el.getBoundingClientRect()
+            if (r.bottom > window.innerHeight + 1 || r.top < -1 || r.right > window.innerWidth + 1 || r.left < -1) {
+              out.push(`${el.id || el.textContent.trim().slice(0, 18)} still at ${Math.round(r.top)}..${Math.round(r.bottom)} of ${window.innerHeight} after scrolling`)
+            }
+          }
+          return out
+        }, screen)
+        if (bad.length) problems.push(`${screen} @${size.height}px: ${bad.join(', ')}`)
+        if (screen === 'consent') await page.evaluate(() => { document.getElementById('consent-sheet').hidden = true })
+      }
+    }
+
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.evaluate(() => window.__pilot.show('consent'))
+    if (problems.length) throw new Error(problems.join(' | '))
+    return `${SCREENS.length} screens at two heights, every control reachable`
   })
 
   await step('the real pose model loads in the browser', async () => {
-    await page.locator('#tick-keep').check()
     await page.locator('#consent-next').click()
+    await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'poseset', null, { timeout: 15_000 })
+    await page.locator('#setpick button[data-set="physique"]').click()
     await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'ready', null, { timeout: 60_000 })
     await page.waitForFunction(() => !!window.__pilot.state.pose, null, { timeout: 150_000 })
     const info = await page.evaluate(() => {
@@ -306,47 +397,79 @@ console.log(`\npilot end to end\n`)
   // The real duration is proven; shorten the script for the flow tests.
   await page.evaluate(() => { for (const s of window.__pilot.config.capture.steps) s.seconds = 1.2 })
 
-  const orders = []
-  await step('the review screen gives nothing away', async () => {
-    await page.locator('#start').click()
-    await identify(page, '0821234567')
-    await page.locator('#tick-age').check(); await page.locator('#tick-record').check(); await page.locator('#tick-keep').check()
-    await page.evaluate((s) => window.__pilot.useReplay(s), streamFor(1, SHORT))
-    await page.locator('#consent-next').click()
-    await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'ready', null, { timeout: 40_000 })
-    await page.locator('#begin').click()
-    await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'review', null, { timeout: 40_000 })
+  await step('the review screen names every frame, in capture order', async () => {
+    /*
+     * This assertion is the exact inverse of the one it replaces.
+     *
+     * The screen used to show five unlabelled photographs in a shuffled order
+     * so that keeping the progress shot was an unprompted choice, and the old
+     * step proved nothing gave it away. That was overruled deliberately: the
+     * frames are named and fixed now, and DECISIONS.md records that the keep
+     * thresholds were raised because the quantity being measured changed. A
+     * test that quietly outlives the decision it was guarding is worse than
+     * no test, so this one changed with it.
+     */
+    await runSession(page, { who: '0835550001', stream: streamFor(1, SHORT), seconds: 6, keep: [], stopAtReview: true })
 
     const cards = await page.locator('.frame-card').count()
     if (cards !== 5) throw new Error(`${cards} cards — every step must yield a frame`)
-    const labels = await page.evaluate(() => window.__pilot.reviewLabels())
-    const sub = await page.locator('#review-sub').innerText()
-    const banned = /comparison|measurement|candid|post frame|front double|side chest|back double|relaxed|lines up|next visit/i
-    for (const l of labels) if (banned.test(l)) throw new Error(`a card reads "${l}"`)
-    if (banned.test(sub)) throw new Error(`the subheading explains it: "${sub}"`)
-    orders.push((await page.evaluate(() => window.__pilot.reviewOrder())).join(','))
 
-    await page.locator('.frame-card[data-kind="measurement"] .frame-toggle').click()
-    await page.locator('#keep-done').click()
+    const labels = await page.evaluate(() => window.__pilot.frameLabels())
+    const order = await page.evaluate(() => window.__pilot.frameOrder())
+    if (order.join(',') !== 'measurement,post,post,post,candid') throw new Error(`order is ${order.join(',')}`)
+    if (!/progress shot/i.test(labels[0])) throw new Error(`the first card reads "${labels[0]}"`)
+    if (!/same spot, same light/i.test(labels[0])) throw new Error('the progress shot does not say why it matters')
+    if (labels.slice(1, 4).some((l, i) => l !== `Pose ${i + 1}`)) throw new Error(`poses read ${labels.slice(1, 4).join(' / ')}`)
+    if (labels[4] !== 'Candid') throw new Error(`the last card reads "${labels[4]}"`)
+    return labels.map((l) => `"${l.slice(0, 20)}"`).join(' ')
+  })
+
+  await step('keeping and sending are separate, and both start off', async () => {
+    const pressed = await page.evaluate(() =>
+      [...document.querySelectorAll('.frame-card .frame-toggle')].map((b) => b.getAttribute('aria-pressed')),
+    )
+    if (pressed.length !== 10) throw new Error(`${pressed.length} toggles across 5 cards`)
+    if (pressed.some((p) => p === 'true')) throw new Error('something is pre-selected')
+
+    // Ticking send must not tick keep. One is "I want this photograph", the
+    // other is "I want you to remember me"; collapsing them makes a member
+    // who wants a picture accept a history on a laptop to get it.
+    const first = page.locator('.frame-card').first()
+    await first.locator('[data-act="send"]').click()
+    const after = await first.evaluate((c) => ({
+      send: c.querySelector('[data-act="send"]').getAttribute('aria-pressed'),
+      keep: c.querySelector('[data-act="keep"]').getAttribute('aria-pressed'),
+    }))
+    if (after.send !== 'true') throw new Error('send did not take')
+    if (after.keep === 'true') throw new Error('sending also set keep')
+    await first.locator('[data-act="send"]').click()
+    return '10 toggles, all off by default, independent of each other'
+  })
+
+  await step('Done deletes everything not kept, and says so', async () => {
+    await page.locator('.frame-card').first().locator('[data-act="keep"]').click()
+    await page.locator('.frame-card').last().locator('[data-act="send"]').click()
+    const sessionId = await page.evaluate(() => window.__pilot.state.session.id)
+    await page.locator('#review-done').click()
+    await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'done', null, { timeout: 20_000 })
+
+    const line = await page.locator('#done-line').innerText()
+    if (!/deleted/i.test(line)) throw new Error(`the done screen reads "${line}"`)
+
+    const left = await page.evaluate(async (id) => (await window.__pilot.db.framesForSession(id)).length, sessionId)
+    if (left !== 1) throw new Error(`${left} frame(s) survived — only the kept one should`)
+
+    await page.locator('#return-intent button[data-intent="maybe"]').click()
     await page.waitForFunction(() => ['attract', 'compare'].includes(document.getElementById('app').dataset.screen), null, { timeout: 20_000 })
+    const intent = await page.evaluate(async (id) => (await window.__pilot.db.listSessions()).find((r) => r.id === id)?.returnIntent, sessionId)
+    if (intent !== 'maybe') throw new Error(`the answer logged as ${intent}`)
     if (await page.locator('#compare-done').isVisible()) await page.locator('#compare-done').click()
-    return `${labels.length} cards, all unlabelled: ${labels.map((l) => `"${l}"`).join(' ')}`
+    return `"${line}" · 1 kept, the sent-but-unkept frame deleted, answer logged "${intent}"`
   })
 
-  await step('the order is shuffled, not the capture order', async () => {
-    const canonical = 'measurement,post,post,post,candid'
-    for (let i = 0; i < 4; i++) {
-      await runSession(page, { who: '0835550001', stream: streamFor(1, SHORT), seconds: 6, keep: [] })
-      orders.push((await page.evaluate(() => window.__pilot.reviewOrder())).join(','))
-    }
-    // The last read happens after the screen has moved on, so drop empties.
-    const seen = orders.filter(Boolean)
-    if (!seen.length) throw new Error('no orders captured')
-    if (seen.every((o) => o === canonical)) throw new Error('every session was in capture order')
-    return `${new Set(seen).size} distinct order(s) in ${seen.length} sessions`
-  })
-
-  await step('send and wipe leaves nothing behind', async () => {
+  await step('keeping nothing leaves nothing behind', async () => {
+    // "Send and wipe" is gone as a button: there is one way out now and it
+    // deletes whatever was not kept. Keeping nothing is the same journey.
     await runSession(page, { who: '0839998888', stream: streamFor(1, SHORT), seconds: 6, wipe: true })
     const after = await page.evaluate(async () => {
       const sessions = await window.__pilot.db.listSessions()
@@ -697,17 +820,22 @@ console.log(`\npilot end to end\n`)
   await step('nothing derived from the member is stored', async () => {
     await page.locator('#phone-next').click()
     await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'consent', null, { timeout: 15_000 })
-    await page.locator('#tick-age').check(); await page.locator('#tick-record').check(); await page.locator('#tick-keep').check()
     await page.evaluate((s) => window.__pilot.useReplay(s), streamFor(1, SHORT))
     await page.locator('#consent-next').click()
+    await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'poseset', null, { timeout: 15_000 })
+    await page.locator('#setpick button[data-set="physique"]').click()
     await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'ready', null, { timeout: 40_000 })
+    await page.evaluate(() => { window.__pilot.config.capture.prerollSeconds = 0 })
     await page.locator('#begin').click()
     await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'review', null, { timeout: 40_000 })
     const shown = await page.locator('#review-code-value').textContent()
     if (shown !== code) throw new Error(`review shows "${shown}", issued "${code}"`)
-    await page.locator('.frame-card[data-kind="measurement"] .frame-toggle').click()
-    await page.locator('#keep-done').click()
+    await page.locator('.frame-card[data-kind="measurement"] [data-act="keep"]').click()
+    await page.locator('#review-done').click()
+    await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'done', null, { timeout: 20_000 })
+    await page.locator('#done-skip').click()
     await page.waitForFunction(() => ['attract', 'compare'].includes(document.getElementById('app').dataset.screen), null, { timeout: 20_000 })
+    if (await page.locator('#compare-done').isVisible()) await page.locator('#compare-done').click()
     const key = await page.evaluate(async () => (await window.__pilot.db.listMembers())[0]?.memberKey)
     if (key !== `c_${code.replace('-', '')}`) throw new Error(`key is ${key}`)
     return `member key is the code itself (${key}) — nothing hashed, nothing reversible`

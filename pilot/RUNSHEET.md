@@ -11,6 +11,10 @@ waiting. `CHECKLIST.md` is for before the pilot; this is for during it.
 - [ ] Laptop plugged in. **Not** on battery — a laptop that sleeps mid-capture
       loses the session and the member's time.
 - [ ] Start the server, open `http://localhost:4400`, leave it full screen.
+- [ ] **Operator → Now.** The readiness panel is the first thing to read every
+      morning. A red cross means do not run a real session until it is fixed;
+      an amber one means run, but know about it, because it will end up in the
+      write-up. Green means it was checked, not that nobody looked.
 - [ ] Check the top of the screen. **If there is an orange DEMO ribbon, stop.**
       Nothing recorded under that ribbon counts, and nothing real can be
       recorded while it is up.
@@ -52,6 +56,12 @@ photograph exists you have already done the thing you were not allowed to do.
 There is no process to work around it and no version of "they looked older"
 that helps you afterwards.
 
+**The mirror keeps telling someone to move.**
+It is comparing them to where they stood last time, and it is usually right.
+But it is advice, not a gate: **Start anyway** always works, and for some
+bodies, some clothing, and anyone in a wheelchair the model will simply read
+them badly. Never make a member keep adjusting. Let them press Start.
+
 **Somebody walks off halfway.**
 Leave it. The screen warns, then clears itself and deletes anything they had
 not chosen. The visit is logged as abandoned and does not count against the
@@ -64,6 +74,9 @@ consent cannot be in a photograph. Re-run it. Thirty seconds is cheap.
 
 ## Closing
 
+- [ ] **Operator → Now → Notes.** Write the day down there, in the app, not on
+      your phone. It goes into the write-up at the end automatically, and the
+      dashboard cannot see any of it.
 - [ ] Note anything a member said in their own words — especially a complaint,
       a hesitation, or the reason someone walked away. The dashboard cannot see
       any of that, and it is usually where the real finding is.

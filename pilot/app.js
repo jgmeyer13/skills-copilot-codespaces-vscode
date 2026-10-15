@@ -166,6 +166,7 @@ const IDLE_WARNING = 20_000
 
 let idleTimer = null
 let idleWarnTimer = null
+let idleEnabled = true
 
 function clearIdle() {
   clearTimeout(idleTimer)
@@ -190,6 +191,7 @@ async function idleGiveUp() {
 
 function armIdle() {
   clearIdle()
+  if (!idleEnabled) return
   const ms = idleMsFor(state.screen)
   if (!ms) return
   idleWarnTimer = setTimeout(() => {
@@ -1904,6 +1906,17 @@ window.__pilot = {
   /** What the review screen is showing, in display order, with hidden kinds. */
   reviewOrder: () => [...document.querySelectorAll('#frames .frame-card')].map((c) => c.dataset.kind),
   idleFor: idleMsFor,
+  /*
+   * The harness turns the watchdog off.
+   *
+   * It is a real feature with its own dedicated test, and it fires after 60
+   * seconds on any member-facing screen. A suite that loads a 5.6MB pose
+   * model and drives a dozen screens spends longer than that on the consent
+   * screen alone, so leaving it armed means the app resets itself mid-test
+   * and every step afterwards fails for a reason that has nothing to do with
+   * what it was checking.
+   */
+  setIdle(on) { idleEnabled = on; if (!on) clearIdle(); else armIdle() },
   frameLabels: () => [...document.querySelectorAll('#frames .frame-label')].map((n) => n.textContent.trim()),
   frameOrder: () => [...document.querySelectorAll('#frames .frame-card')].map((c) => c.dataset.kind),
   forceIdle: () => idleGiveUp(),

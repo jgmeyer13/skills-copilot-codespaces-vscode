@@ -58,9 +58,43 @@ operator screen under "Image quality and what the model could see".
 - [ ] Step out of frame: the badge says "Step into frame".
 - [ ] Top right says `mediapipe on GPU`, or CPU. CPU is fine, just slower.
 
+## 2b. The mirror coaches you
+
+Only works on a **second** visit with the same number — the first visit has
+nothing to line up against and gets framing guidance instead.
+
+- [ ] Run one session, keep the progress shot, then check in again with the
+      same number. A blue ghost of your last position appears.
+- [ ] A ring draws around your own hips and fills while you hold still.
+- [ ] Walk towards the camera: it should say **Step back a little**.
+- [ ] Turn sideways: the Match meter should collapse and it should say
+      **Turn square to the camera**.
+- [ ] Stand where you stood last time and hold it. Within about a second the
+      ring completes, the frame edges go green, and it reads **Lined up with
+      last time**.
+- [ ] **Check the button never dies.** While badly aligned it must still say
+      *Start anyway* and still work. If it is ever disabled, that is a bug —
+      tell me.
+- [ ] Tell me whether the cues nag. They are deliberately loose; if it corrects
+      you while you are basically fine, the tolerances are wrong.
+
+## 2c. Which set
+
+- [ ] After consent you get **Physique** and **Athlete**. Try both.
+- [ ] The first shot is the same in both — that is deliberate, it is the one
+      that has to line up next time.
+- [ ] Athlete's third pose is **Race ready**: one foot forward, lean in.
+      Check the silhouette actually reads as that from the mark.
+
 ## 3. Thirty seconds
 
-- [ ] Press Start. The cue reads **Stand on the mark** and counts down.
+- [ ] Press Start. You get **five seconds** first — "Stand on the tape mark.
+      Shirt on or off — your call." Check it is long enough to walk there.
+- [ ] A **line figure** appears for each pose beside the words, and a bar fills
+      across the bottom as the pose counts down.
+- [ ] A soft **flash** fires each time a photograph is actually taken. If you
+      never see one, nothing is being kept — tell me.
+- [ ] The cue reads **Stand on the mark** and counts down.
 - [ ] **Stand on the mark and read the screen from there**, not from beside
       the laptop. The pose name, the countdown and the Got it / Adjust badge
       must all be readable at 2.5 m. If they are not, say so — that is a
