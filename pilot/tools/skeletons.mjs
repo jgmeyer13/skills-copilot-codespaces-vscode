@@ -29,7 +29,7 @@ const P = (x, y, visibility = 0.98) => ({ x, y, z: 0, visibility })
  * @param facing 'front' | 'away' | 'side'
  * @param arms   'down' | 'bicep' | 'across'
  */
-export function skeleton({ facing = 'front', arms = 'down', cx = 0.5, scale = 1, jitter = 0, rng = Math.random } = {}) {
+export function skeleton({ facing = 'front', arms = 'down', legs = 'together', cx = 0.5, scale = 1, jitter = 0, rng = Math.random } = {}) {
   const j = () => (jitter ? (rng() - 0.5) * 2 * jitter : 0)
   const s = (v) => v * scale
   const y = {
@@ -46,8 +46,12 @@ export function skeleton({ facing = 'front', arms = 'down', cx = 0.5, scale = 1,
   // A person facing the lens shows their anatomical left on the image right.
   const dir = facing === 'away' ? -1 : 1
 
-  const lShoulder = P(cx + dir * span + j(), y.shoulder + j())
-  const rShoulder = P(cx - dir * span + j(), y.shoulder + j())
+  // A race-ready stance puts the shoulders ahead of the hips. Everything
+  // else stands upright, so the lean is zero and the shoulders sit over the
+  // hips as before.
+  const lean = legs === 'split' ? s(0.035) : 0
+  const lShoulder = P(cx + lean + dir * span + j(), y.shoulder + j())
+  const rShoulder = P(cx + lean - dir * span + j(), y.shoulder + j())
   const lHip = P(cx + dir * hipHalf + j(), y.hip + j())
   const rHip = P(cx - dir * hipHalf + j(), y.hip + j())
 
@@ -91,18 +95,37 @@ export function skeleton({ facing = 'front', arms = 'down', cx = 0.5, scale = 1,
   lm[16] = rWrist
   lm[23] = lHip
   lm[24] = rHip
-  lm[25] = P(lHip.x + j(), y.knee + j())
-  lm[26] = P(rHip.x + j(), y.knee + j())
-  lm[27] = P(lHip.x + j(), y.ankle + j())
-  lm[28] = P(rHip.x + j(), y.ankle + j())
+  if (legs === 'split') {
+    // One foot forward, both knees bent. Photographed from the front a split
+    // stance reads as horizontal separation between the ankles, which is
+    // what the race-ready template scores.
+    lm[25] = P(lHip.x + s(0.055) + j(), y.knee - s(0.012) + j())
+    lm[26] = P(rHip.x - s(0.048) + j(), y.knee + s(0.006) + j())
+    lm[27] = P(lHip.x + s(0.105) + j(), y.ankle + j())
+    lm[28] = P(rHip.x - s(0.09) + j(), y.ankle + j())
+  } else {
+    lm[25] = P(lHip.x + j(), y.knee + j())
+    lm[26] = P(rHip.x + j(), y.knee + j())
+    lm[27] = P(lHip.x + j(), y.ankle + j())
+    lm[28] = P(rHip.x + j(), y.ankle + j())
+  }
   return lm
 }
 
-/** The pose each step of the capture script is asking for. */
-const POSE_SHAPE = {
+/**
+ * The pose each step of the capture script is asking for.
+ *
+ * Exported because the scoring test used to keep its own copy of this map,
+ * and a copy that silently falls back to front_relaxed for any pose it has
+ * not heard of will report a brand new template as perfectly good while
+ * actually scoring it against a standing body.
+ */
+export const POSE_SHAPE = {
   front_relaxed: { facing: 'front', arms: 'down' },
   front_double_bicep: { facing: 'front', arms: 'bicep' },
   side_chest: { facing: 'side', arms: 'across' },
+  side_relaxed: { facing: 'side', arms: 'down' },
+  race_ready: { facing: 'front', arms: 'down', legs: 'split' },
   back_double_bicep: { facing: 'away', arms: 'bicep' },
 }
 

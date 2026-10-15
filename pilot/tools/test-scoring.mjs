@@ -11,7 +11,7 @@
  */
 
 import { POSES, scoreFrame, scoreCandid, motionBetween, createSelector, features, framing } from '../src/scoring.js'
-import { skeleton, sessionStream } from './skeletons.mjs'
+import { skeleton, POSE_SHAPE, sessionStream } from './skeletons.mjs'
 
 let failures = 0
 const check = (label, pass, detail = '') => {
@@ -19,12 +19,9 @@ const check = (label, pass, detail = '') => {
   if (!pass) failures += 1
 }
 
-const SHAPES = {
-  front_relaxed: { facing: 'front', arms: 'down' },
-  front_double_bicep: { facing: 'front', arms: 'bicep' },
-  side_chest: { facing: 'side', arms: 'across' },
-  back_double_bicep: { facing: 'away', arms: 'bicep' },
-}
+// One source of truth, shared with the clip generator. A second copy here
+// quietly scored every unknown pose against a plain standing body.
+const SHAPES = POSE_SHAPE
 
 console.log('\nscoring\n')
 
