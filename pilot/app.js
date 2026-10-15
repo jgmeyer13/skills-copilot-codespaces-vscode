@@ -27,6 +27,10 @@ import { newSession, closeSession, summarise, verdict, toCsv, resolutionTier } f
 import { L } from './src/scoring.js'
 import { silhouette } from './src/silhouettes.js'
 import { alignment, createLock } from './src/align.js'
+import { readiness, worstState, rulesFingerprint } from './src/readiness.js'
+import * as report from './src/report.js'
+import { barChart, lineChart, funnelChart, splitBar, PALETTE } from './src/charts.js'
+import { writeUp } from './src/writeup.js'
 
 const $ = (id) => document.getElementById(id)
 const app = $('app')
@@ -275,7 +279,10 @@ $('start-pilot').addEventListener('click', async () => {
   )
   if (!ok) return
   try {
-    const wiped = await db.startRealPilot()
+    // Stamping the thresholds here is what makes DECISIONS.md enforceable
+    // rather than aspirational: any later edit shows up on the readiness
+    // panel for the rest of the run.
+    const wiped = await db.startRealPilot(rulesFingerprint(config.decisionRules))
     await refreshPilotState()
     renderDashboard()
     banner(
@@ -350,8 +357,6 @@ async function refreshAttract() {
   $('attract-count').textContent = state.demo
     ? `${s.sessions} demo session(s)`
     : `${s.sessions} sessions · ${s.members} members`
-  $('dash-foot').textContent =
-    `${purged.deleted} unkept photo(s) deleted on startup. ${purged.remaining} kept photo(s) on this device. Nothing has ever left it.`
 }
 
 
@@ -1084,6 +1089,24 @@ async function presentReview(results) {
   }
 
   /*
+   * How comparable this visit's progress shot actually is.
+   *
+   * Measured on the frame that was really captured, against the frame it will
+   * really be compared with — not on whatever the mirror happened to be
+   * showing when they pressed the button. Keep rate says a member liked a
+   * photograph; this says whether the measurement means anything, and an
+   * instrument producing un-comparable measurements is not an instrument
+   * whatever its keep rate.
+   */
+  const measured = results.find((r) => r.kind === 'measurement')?.landmarks?.[0]
+  if (measured && state.ghost) {
+    const a = alignment(measured, state.ghost)
+    state.session.alignScore = a.score
+    state.session.alignLocked = a.locked
+    await db.saveSession(state.session)
+  }
+
+  /*
    * Fixed order, named frames, two independent decisions each.
    *
    * This screen used to show the five photographs unlabelled and in random
@@ -1471,46 +1494,240 @@ async function askAndForget() {
 $('q-plus').addEventListener('click', () => { state.queue += 1; $('q-value').textContent = state.queue })
 $('q-minus').addEventListener('click', () => { state.queue = Math.max(0, state.queue - 1); $('q-value').textContent = state.queue })
 
+// ── the operator console ───────────────────────────────────────────────────
+/*
+ * Four tabs, because an operator alone in a gym corner and an operator
+ * reading a four-week result are different people with different questions,
+ * and one scrolling page served neither.
+ *
+ *   Now      what is happening, and what is not ready
+ *   Quality  is the output any good
+ *   Pilot    the research, still sealed until the end conditions
+ *   Data     the rows, the export, and the buttons that delete things
+ *
+ * What stays true across all of them: counts are always visible, verdicts are
+ * not. Nothing here scores a threshold before the pilot is over.
+ */
+
+let activeTab = 'now'
+
+for (const b of document.querySelectorAll('#dash-tabs button')) {
+  b.addEventListener('click', () => {
+    activeTab = b.dataset.tab
+    for (const other of document.querySelectorAll('#dash-tabs button')) {
+      other.setAttribute('aria-selected', String(other === b))
+    }
+    for (const pane of document.querySelectorAll('.tabpane')) {
+      pane.hidden = pane.dataset.pane !== activeTab
+    }
+    renderDashboard()
+  })
+}
+
+const pct = (n) => (n === null || n === undefined ? '—' : `${Math.round(n * 100)}%`)
+const dayLabel = (ts) => new Date(ts).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })
+
+function tilesInto(id, items, { demo = false } = {}) {
+  $(id).innerHTML = items
+    .map((t) => `<div class="tile"><dt>${esc(t.k)}${demo ? ' · demo' : ''}</dt><dd>${t.v}<small>${esc(t.s ?? '')}</small></dd></div>`)
+    .join('')
+}
+
 async function renderDashboard() {
   const rows = (await db.listSessions()).filter((r) => !!r.demo === !!state.demo)
   const s = summarise(rows)
   const v = verdict(s, config.decisionRules)
-  const pct = (n) => `${Math.round(n * 100)}%`
+  const counters = await db.counters()
   const tag = state.demo ? '<span class="demo-tag">demo</span>' : ''
 
-  $('dash-title').innerHTML = state.demo ? `Pilot dashboard ${tag}` : 'Pilot dashboard'
+  $('dash-title').innerHTML = state.demo ? `Operator ${tag}` : 'Operator'
 
-  // ── the live funnel: counts only, never sealed ──────────────────────────
-  const c = await db.counters()
-  const started = c.checkin ?? 0
-  const tile = (label, value, sub) =>
-    `<div class="tile"><dt>${label}</dt><dd>${value}</dd>${sub ? `<small>${sub}</small>` : ''}</div>`
-  const dropFrom = (from, to) => {
-    const a = c[from] ?? 0
-    const b = c[to] ?? 0
-    return a ? `${a - b} left here (${Math.round(((a - b) / a) * 100)}%)` : 'nobody yet'
+  if (activeTab === 'now') await renderNow(rows, s, counters)
+  if (activeTab === 'quality') renderQuality(rows, s, counters)
+  if (activeTab === 'pilot') renderPilot(rows, s, v, counters)
+  if (activeTab === 'data') renderData(rows, s)
+}
+
+// ── Now ────────────────────────────────────────────────────────────────────
+
+async function renderNow(rows, s, counters) {
+  /*
+   * Storage is asked for rather than assumed. A browser that will not say how
+   * much room is left gets a warning, not a cheerful green tick: "we could
+   * not check" and "it is fine" are different claims and only one of them is
+   * honest.
+   */
+  let storage = null
+  try {
+    if (navigator.storage?.estimate) {
+      const e = await navigator.storage.estimate()
+      if (e && e.quota) storage = { usage: e.usage ?? 0, quota: e.quota }
+    }
+  } catch { /* some browsers refuse; the check handles null */ }
+
+  const checks = readiness({
+    config,
+    pilot: state.pilot,
+    demoSessions: state.pilot?.demoSessions ?? 0,
+    storage,
+    consentTexts: state.consentTexts,
+    rulesAtStart: await db.getMeta('rulesAtStart'),
+    cameraOk: state.screen === 'dashboard' ? undefined : !!state.stream,
+    modelOk: !!state.pose,
+    purgedAt: purged.at,
+    now: Date.now(),
+  })
+
+  const worst = worstState(checks)
+  const pill = $('ready-pill')
+  pill.className = `ready-pill ${worst}`
+  pill.textContent = worst === 'pass' ? 'ready' : worst === 'warn' ? 'check these' : 'not ready'
+
+  $('checks').innerHTML = checks
+    .map(
+      (c) => `<div class="check ${c.state}">
+        <i>${c.state === 'pass' ? '✓' : c.state === 'warn' ? '!' : '✕'}</i>
+        <div><b>${esc(c.label)}</b><span>${esc(c.detail)}</span>${c.fix ? `<em>${esc(c.fix)}</em>` : ''}</div>
+      </div>`,
+    )
+    .join('')
+
+  const today = report.daily(rows).slice(-1)[0] ?? { sessions: 0, kept: 0, newMembers: 0 }
+  tilesInto('today-tiles', [
+    { k: 'Sessions today', v: today.sessions, s: `${s.sessions} in the pilot` },
+    { k: 'Kept something', v: today.kept, s: 'today' },
+    { k: 'First-timers', v: today.newMembers, s: 'today' },
+    { k: 'Queue peak', v: s.peakQueue, s: 'logged by you' },
+  ], { demo: state.demo })
+
+  const last = rows.filter((r) => r.endedAt).sort((a, b) => b.startedAt - a.startedAt)[0]
+  $('last-session').innerHTML = last
+    ? `<b>${new Date(last.startedAt).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}</b> ·
+       ${last.isReturning ? 'returning' : 'new'} ·
+       ${last.squad ? `${last.people} people` : 'solo'} ·
+       ${last.poseSet ?? 'set not logged'} ·
+       kept <b>${(last.kept?.measurement ?? 0) + (last.kept?.post ?? 0) + (last.kept?.candid ?? 0)}</b>,
+       sent <b>${(last.sent?.measurement ?? 0) + (last.sent?.post ?? 0) + (last.sent?.candid ?? 0)}</b> ·
+       ${last.meanConfidence === null || last.meanConfidence === undefined ? 'confidence not logged' : `confidence ${last.meanConfidence.toFixed(2)}`} ·
+       <b>${esc(last.outcome)}</b>`
+    : 'Nothing yet today.'
+
+  const noteKey = `note:${new Date().toISOString().slice(0, 10)}`
+  $('day-note').value = (await db.getMeta(noteKey)) ?? ''
+  $('save-note').onclick = async () => {
+    await db.setMeta(noteKey, $('day-note').value)
+    $('note-saved').textContent = 'Saved.'
+    setTimeout(() => { $('note-saved').textContent = '' }, 2500)
   }
-  $('funnel').innerHTML = [
-    tile('Walked up', started, 'reached the number pad'),
-    tile('Consented', c.consent ?? 0, dropFrom('checkin', 'consent')),
-    tile('Chose poses', c.poseset ?? 0, dropFrom('consent', 'poseset')),
-    tile('Stood on the mark', c.ready ?? 0, dropFrom('poseset', 'ready')),
-    tile('Recorded', c.capture ?? 0, dropFrom('ready', 'capture')),
-    tile('Chose photos', c.review ?? 0, dropFrom('capture', 'review')),
-    tile('Finished', c.done ?? 0, dropFrom('review', 'done')),
-    tile('Detection failures', c.detectionFailure ?? 0, 'model never saw anybody'),
-    tile('Transfer failures', c.transferFailure ?? 0, 'photos did not reach a phone'),
-    tile('Crashes', c.crash ?? 0, 'unhandled errors'),
-  ].join('')
+}
 
-  // ── sealed until the pilot is over ──────────────────────────────────────
+// ── Quality ────────────────────────────────────────────────────────────────
+
+function renderQuality(rows, s, counters) {
+  const comp = report.comparability(rows)
+  tilesInto('comp-tiles', [
+    {
+      k: 'Mean alignment',
+      v: comp.mean === null ? '—' : pct(comp.mean),
+      s: comp.n ? `${comp.n} returning visit(s)${comp.thin ? ' · too few to trust' : ''}` : 'no returning visits yet',
+    },
+    {
+      k: 'Locked on the mark',
+      v: comp.lockedShare === null ? '—' : pct(comp.lockedShare),
+      s: comp.n ? `${comp.locked} of ${comp.n}` : 'nothing to compare',
+    },
+    { k: 'Mean confidence', v: s.meanConfidence === null ? '—' : s.meanConfidence.toFixed(2), s: 'how well the model saw' },
+  ], { demo: state.demo })
+
+  const conf = report.confidenceByDay(rows)
+  $('conf-chart').innerHTML = conf.length
+    ? lineChart(
+        [{
+          id: 'conf',
+          label: 'Mean confidence',
+          colour: PALETTE.series1,
+          points: conf.map((d, i) => ({
+            x: d.day,
+            y: d.mean,
+            title: `${dayLabel(d.day)}: ${d.mean.toFixed(2)} over ${d.n}, worst ${d.worst.toFixed(2)}`,
+            endLabel: i === conf.length - 1 ? d.mean.toFixed(2) : '',
+          })),
+        }],
+        {
+          yMin: 0.4,
+          yMax: 1,
+          threshold: { at: 0.6, label: 'too dark for the model below here' },
+          xLabels: conf.map((d, i) => (i === 0 || i === conf.length - 1 ? dayLabel(d.day) : '')),
+          yLabel: 'mean detection confidence · axis runs 0.4 to 1.0, not from zero',
+        },
+      )
+    : '<p class="tiny">Nothing yet.</p>'
+
+  $('quality').innerHTML = s.quality.length
+    ? s.quality
+        .map((q) => `<tr><td>${esc(q.tier)}</td><td class="mono">${q.sessions}</td><td class="mono">${pct(q.keepRate)}</td><td class="mono">${q.meanConfidence === null ? '—' : q.meanConfidence.toFixed(2)}</td></tr>`)
+        .join('')
+    : '<tr><td colspan="4" style="color:var(--text-3)">No sessions yet.</td></tr>'
+
+  tilesInto('fail-tiles', [
+    { k: 'Detection failures', v: counters.detectionFailure ?? 0, s: 'model never saw anybody' },
+    { k: 'Transfer failures', v: counters.transferFailure ?? 0, s: 'photos did not reach a phone' },
+    { k: 'Crashes', v: counters.crash ?? 0, s: 'unhandled errors' },
+    { k: 'Walked away mid-session', v: rows.filter((r) => r.outcome === 'abandoned').length, s: 'cleared automatically' },
+  ])
+}
+
+// ── Pilot ──────────────────────────────────────────────────────────────────
+
+function renderPilot(rows, s, v, counters) {
+  renderSeal(s, v)
+
+  const fn = report.funnel(counters)
+  const worst = report.worstStep(fn)
+  $('funnel-chart').innerHTML = funnelChart(fn, { worst })
+  $('funnel-note').textContent = worst
+    ? `Most people are lost at "${worst.label}" — ${worst.lost} of ${worst.lost + worst.value}.`
+    : 'Nobody has walked up yet.'
+
+  const days = report.daily(rows)
+  $('daily-chart').innerHTML = barChart(
+    days.map((d) => ({ label: dayLabel(d.day), value: d.sessions, title: `${dayLabel(d.day)}: ${d.sessions} session(s), ${d.kept} kept something` })),
+  )
+
+  const cum = report.cumulativeRates(rows)
+  $('rates-chart').innerHTML = lineChart(
+    [
+      { id: 'keep', label: 'Kept something', colour: PALETTE.series1, points: cum.map((p, i) => ({ x: p.day, y: p.keepRate, title: `${pct(p.keepRate)} of ${p.n}`, endLabel: i === cum.length - 1 ? pct(p.keepRate) : '' })) },
+      { id: 'send', label: 'Sent to a phone', colour: PALETTE.series2, points: cum.map((p, i) => ({ x: p.day, y: p.sendRate, title: `${pct(p.sendRate)} of ${p.n}`, endLabel: i === cum.length - 1 ? pct(p.sendRate) : '' })) },
+    ],
+    {
+      yMax: 1,
+      xLabels: cum.map((p, i) => (i === 0 || i === cum.length - 1 ? dayLabel(p.day) : '')),
+      yLabel: `share of completed sessions, running total · n=${cum.length ? cum[cum.length - 1].n : 0}`,
+    },
+  )
+
+  const hours = report.byHour(rows, { openHour: config.pilot.openHour, closeHour: config.pilot.closeHour })
+  $('hours-chart').innerHTML = barChart(
+    hours.map((h) => ({ label: `${h.hour}:00`, value: h.sessions, title: `${h.hour}:00 — ${h.sessions} session(s)` })),
+  )
+  const pods = report.podsNeeded(rows)
+  $('pods-note').textContent = pods.pods
+    ? `Busiest hour so far: ${pods.peakHour}:00 with ${pods.peakArrivals} arrival(s). At a median ${pods.minutesInside} minutes inside, one pod clears ${pods.throughputPerPod} an hour — so that hour needs ${pods.pods} pod(s). One busy day is not a pattern; this is worth reading in week four, not week one.`
+    : 'Not enough sessions to say anything about pod count yet.'
+
+  $('poseset-split').innerHTML = splitBar(report.poseSetSplit(rows).buckets)
+  $('intent-split').innerHTML = splitBar(report.returnIntentSplit(rows).buckets)
+}
+
+function renderSeal(s, v) {
   const sealed = $('sealed')
   if (v.sealed) {
     const weeksDone = Math.min(1, s.weeksRunning / config.decisionRules.minimumWeeks)
     const sessionsDone = Math.min(1, s.sessions / config.decisionRules.minimumSessions)
     sealed.hidden = false
     sealed.innerHTML = `
-      <h3>Results sealed${tag}</h3>
+      <h3>Results sealed${state.demo ? '<span class="demo-tag">demo</span>' : ''}</h3>
       <p style="margin:0">Raw numbers only while the pilot runs. The thresholds are in
       <strong>DECISIONS.md</strong> and nothing is scored against them until both end
       conditions are met — a partial score is a number that gets screenshotted.</p>
@@ -1527,96 +1744,126 @@ async function renderDashboard() {
       ${
         v.unsealByDay
           ? `<p style="margin:12px 0 0" class="tiny"><strong>It opens either way on day ${v.unsealByDay}</strong>
-             — ${v.daysLeft === null ? '' : `${Math.ceil(v.daysLeft)} day(s) from now, `}whatever the session count.
-             Both conditions are an AND, and a pilot that runs its weeks but falls short on sessions
-             would otherwise stay shut for ever and never be read at all.</p>`
+             — ${v.daysLeft === null ? '' : `${Math.ceil(v.daysLeft)} day(s) from now, `}whatever the session count.</p>`
           : ''
       }`
     $('verdict').hidden = true
     $('rules').hidden = true
-  } else {
-    sealed.hidden = true
-    $('verdict').hidden = false
-    $('rules').hidden = false
-    $('verdict').innerHTML = `
-      ${
-        v.openedEarly
-          ? `<p class="early">Opened on the day-${v.unsealByDay} backstop, not by the end conditions —
-             ${v.weeksLeft > 0 ? `${v.weeksLeft.toFixed(1)} week(s) short` : ''}${v.weeksLeft > 0 && v.sessionsLeft > 0 ? ' and ' : ''}${v.sessionsLeft > 0 ? `${v.sessionsLeft} session(s) short` : ''}.
-             Read it as a thin sample and say so to anyone you show it to.</p>`
-          : ''
-      }
-      <h3>${v.overall === 'go' ? 'Both thresholds met' : v.overall === 'no' ? 'A threshold was clearly missed' : 'Mixed — neither clearly met'}</h3>
-      <p style="margin:0 0 8px">${
-        v.character === 'unclear'
-          ? 'Too few kept photos to say which product this is.'
-          : v.character === 'instrument'
-            ? `<strong>Reads as an instrument.</strong> ${pct(s.measurementKeptShare)} of members who kept anything kept the comparison frame.`
-            : v.character === 'photobooth'
-              ? `<strong>Reads as a photo booth.</strong> Only ${pct(s.measurementKeptShare)} kept the comparison frame.`
-              : `<strong>Reads as both.</strong> ${pct(s.measurementKeptShare)} kept the comparison frame, ${pct(s.postKeptShare)} kept a post frame.`
-      }</p>
-      <p style="margin:0"><strong>Squad: ${pct(v.squad.value)}.</strong> ${
-        v.squad.buildFor
-          ? 'Above the threshold — build the second version around groups.'
-          : 'Below the threshold — build the solo product first. This is not a reason to stop.'
-      }</p>`
+    $('tiles').innerHTML = ''
+    return
   }
 
-  const tiles = [
+  sealed.hidden = true
+  $('verdict').hidden = false
+  $('rules').hidden = false
+  $('verdict').innerHTML = `
+    ${
+      v.openedEarly
+        ? `<p class="early">Opened on the day-${v.unsealByDay} backstop, not by the end conditions.
+           Read it as a thin sample and say so to anyone you show it to.</p>`
+        : ''
+    }
+    <h3>${v.overall === 'go' ? 'Both thresholds met' : v.overall === 'no' ? 'A threshold was clearly missed' : 'Mixed — neither clearly met'}</h3>
+    <p style="margin:0 0 8px">${
+      v.character === 'unclear'
+        ? 'Too few kept photos to say which product this is.'
+        : v.character === 'instrument'
+          ? `<strong>Reads as an instrument.</strong> ${pct(s.measurementKeptShare)} of members who kept anything kept the progress shot.`
+          : v.character === 'photobooth'
+            ? `<strong>Reads as a photo booth.</strong> Only ${pct(s.measurementKeptShare)} kept the progress shot.`
+            : `<strong>Reads as both.</strong> ${pct(s.measurementKeptShare)} kept the progress shot, ${pct(s.postKeptShare)} kept a post frame.`
+    }</p>
+    <p style="margin:0"><strong>Squad: ${pct(v.squad.value)}.</strong> ${
+      v.squad.buildFor
+        ? 'Above the threshold — build the second version around groups.'
+        : 'Below the threshold — build the solo product first. This is not a reason to stop.'
+    }</p>`
+
+  tilesInto('tiles', [
     { k: 'Sessions', v: s.sessions, s: `${s.today} today` },
     { k: 'Members', v: s.members, s: `${pct(s.newShare)} first-timers` },
     { k: 'Keep rate', v: pct(s.keepRate), s: `${pct(s.sharedShare)} shared` },
     { k: 'Return ≤14d', v: s.returnCohort ? pct(s.returnWithin14Days) : '—', s: `${s.returnCohort} eligible` },
     { k: 'Squad', v: pct(s.squadShare), s: '2–3 in frame' },
-    { k: 'Comparison kept', v: s.keepRate ? pct(s.measurementKeptShare) : '—', s: 'of those who kept' },
+    { k: 'Progress shot kept', v: s.keepRate ? pct(s.measurementKeptShare) : '—', s: 'of those who kept' },
     { k: 'Median time', v: `${s.medianMinutes.toFixed(1)}m`, s: `${s.retakeRate.toFixed(2)} retakes` },
-    { k: 'Peak queue', v: s.peakQueue, s: 'logged by operator' },
-  ]
-  $('tiles').innerHTML = tiles
-    .map((t) => `<div class="tile"><dt>${t.k}${state.demo ? ' · demo' : ''}</dt><dd>${t.v}<small>${t.s}</small></dd></div>`)
-    .join('')
+    { k: 'Peak queue', v: s.peakQueue, s: 'logged by you' },
+  ], { demo: state.demo })
 
   $('rules').innerHTML = v.rows
     .map(
       (r) => `<div class="rule">
-        <div><b>${r.label}</b><small>${r.note}</small></div>
+        <div><b>${esc(r.label)}</b><small>${esc(r.note)}</small></div>
         <span class="val">${r.state === 'pending' ? '—' : pct(r.value)}</span>
         <span class="pill ${r.state}">${r.state === 'pending' ? 'pending' : r.state === 'go' ? `≥ ${pct(r.target)}` : r.state}</span>
       </div>`,
     )
     .join('')
-
-  $('quality').innerHTML = s.quality.length
-    ? s.quality
-        .map(
-          (q) => `<tr>
-            <td>${q.tier}</td><td class="mono">${q.sessions}</td>
-            <td class="mono">${pct(q.keepRate)}</td>
-            <td class="mono">${q.meanConfidence === null ? '—' : q.meanConfidence.toFixed(2)}</td>
-          </tr>`,
-        )
-        .join('')
-    : '<tr><td colspan="4" style="color:var(--text-3)">No sessions yet.</td></tr>'
-
-  $('log').innerHTML = rows
-    .slice(0, 40)
-    .map((row) => {
-      const kept = row.kept.measurement + row.kept.post + row.kept.candid
-      const shared = row.shared.measurement + row.shared.post + row.shared.candid
-      return `<tr>
-        <td class="mono">${new Date(row.startedAt).toLocaleString('en-ZA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${row.demo ? ' <span class="demo-tag">demo</span>' : ''}</td>
-        <td>${row.isReturning ? 'returning' : 'new'}</td>
-        <td>${row.squad ? `${row.people} squad` : 'solo'}</td>
-        <td class="mono">${kept}${row.kept.measurement ? ' ★' : ''}</td>
-        <td class="mono">${shared}</td>
-        <td class="mono">${row.endedAt ? ((row.endedAt - row.startedAt) / 60000).toFixed(1) : '—'}</td>
-        <td class="mono">${row.queueAtStart ?? 0}</td>
-        <td>${row.outcome}</td>
-      </tr>`
-    })
-    .join('')
 }
+
+// ── Data ───────────────────────────────────────────────────────────────────
+
+function renderData(rows, s) {
+  $('log').innerHTML = rows.length
+    ? rows
+        .slice(0, 60)
+        .map((row) => {
+          const kept = (row.kept?.measurement ?? 0) + (row.kept?.post ?? 0) + (row.kept?.candid ?? 0)
+          const sent = (row.sent?.measurement ?? 0) + (row.sent?.post ?? 0) + (row.sent?.candid ?? 0)
+          return `<tr>
+            <td class="mono">${new Date(row.startedAt).toLocaleString('en-ZA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${row.demo ? ' <span class="demo-tag">demo</span>' : ''}</td>
+            <td>${row.isReturning ? 'returning' : 'new'}${row.squad ? ` · ${row.people}` : ''}</td>
+            <td>${esc(row.poseSet ?? '—')}</td>
+            <td class="mono">${kept}${row.kept?.measurement ? ' ★' : ''}</td>
+            <td class="mono">${sent}</td>
+            <td class="mono">${typeof row.alignScore === 'number' ? row.alignScore.toFixed(2) : '—'}</td>
+            <td class="mono">${row.endedAt ? ((row.endedAt - row.startedAt) / 60000).toFixed(1) : '—'}</td>
+            <td class="mono">${row.queueAtStart ?? 0}</td>
+            <td>${esc(row.returnIntent ?? '—')}</td>
+            <td>${esc(row.outcome)}</td>
+          </tr>`
+        })
+        .join('')
+    : '<tr><td colspan="10" style="color:var(--text-3)">No sessions yet.</td></tr>'
+
+  $('dash-foot').textContent =
+    `${purged.deleted} unkept photo(s) deleted on startup. ${purged.remaining} kept photo(s) on this device. Nothing has ever left it.`
+}
+
+
+/*
+ * The write-up, generated rather than drafted.
+ *
+ * A person with a dashboard and a deadline writing their own summary is
+ * exactly how a pilot becomes a press release, so the numbers, the intervals
+ * and the list of things the pilot cannot answer all come out of the data
+ * with nobody's hand on them.
+ */
+$('export-report').addEventListener('click', async () => {
+  const rows = (await db.listSessions()).filter((r) => !!r.demo === !!state.demo)
+  const notes = []
+  for (const row of await db.allMeta()) {
+    if (String(row.key).startsWith('note:') && String(row.value ?? '').trim()) {
+      notes.push({ date: String(row.key).slice(5), text: String(row.value).trim() })
+    }
+  }
+  notes.sort((a, b) => a.date.localeCompare(b.date))
+
+  const text = writeUp({
+    sessions: rows,
+    summary: summarise(rows),
+    verdict: verdict(summarise(rows), config.decisionRules),
+    counters: await db.counters(),
+    config,
+    notes,
+  })
+  const name = `podium-writeup-${new Date().toISOString().slice(0, 10)}${state.demo ? '-DEMO' : ''}.md`
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }))
+  a.download = name
+  a.click()
+  banner(`${name} saved.`, 5000)
+})
 
 $('operator-present').addEventListener('change', async (e) => {
   state.operatorPresent = e.target.checked
@@ -1646,7 +1893,11 @@ window.__pilot = {
   useReplay(stream) { state.poseOverride = createReplayPose(stream); return state.poseOverride.kind },
   useLive() { state.poseOverride = null },
   async seedSessions(rows) { for (const row of rows) await db.saveSession(row) },
-  async startRealPilot() { const r = await db.startRealPilot(); await refreshPilotState(); return r },
+  async startRealPilot() {
+    const r = await db.startRealPilot(rulesFingerprint(config.decisionRules))
+    await refreshPilotState()
+    return r
+  },
   counters: () => db.counters(),
   async pilotState() { return db.pilotState() },
   async wipe() { await db.wipeEverything(); await refreshPilotState() },

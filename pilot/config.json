@@ -29,8 +29,9 @@
 
   "languages": {
     "_comment": "Each entry is a file in consent/. The first is the default. A member can switch at any point on the consent screen, and which language they read is recorded with their consent.",
-    "en": { "label": "English", "file": "consent/consent.en.md" },
-    "af": { "label": "Afrikaans", "file": "consent/consent.af.md" }
+    "_status": "Mark a language 'placeholder' until a person who speaks it has written and checked the text. The readiness panel reads this field; it does not try to guess from the prose, because an editorial note saying DRAFT FOR LEGAL REVIEW is not the same thing as an unwritten translation.",
+    "en": { "label": "English", "file": "consent/consent.en.md", "status": "ready" },
+    "af": { "label": "Afrikaans", "file": "consent/consent.af.md", "status": "placeholder" }
   },
 
   "privacy": {

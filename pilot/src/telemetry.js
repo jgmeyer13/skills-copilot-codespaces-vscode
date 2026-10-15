@@ -46,6 +46,10 @@ export function newSession({ memberKey, isReturning, people, queueAtStart, keeps
     // Image quality and how well the model could see, so keep rate can be read
     // against both. A dark room is the point of the product and also the thing
     // most likely to break the pose model.
+    // How well the progress shot lined up with the member's last one. Null on
+    // a first visit, because there was nothing to line up against.
+    alignScore: null,
+    alignLocked: null,
     captureWidth: camera?.width ?? null,
     captureHeight: camera?.height ?? null,
     cameraLabel: camera?.label ?? null,
@@ -290,7 +294,7 @@ const CSV_COLUMNS = [
   'queueAtStart', 'retakes', 'outcome', 'keptMeasurement', 'keptPost', 'keptCandid',
   'sentMeasurement', 'sentPost', 'sentCandid',
   'sharedMeasurement', 'sharedPost', 'sharedCandid', 'framesProduced', 'meanScore',
-  'poseSet', 'returnIntent', 'operatorPresent',
+  'poseSet', 'returnIntent', 'operatorPresent', 'alignScore', 'alignLocked',
   'captureWidth', 'captureHeight', 'resolutionTier', 'meanConfidence', 'cameraLabel',
 ]
 
@@ -322,6 +326,8 @@ export function toCsv(sessions) {
       s.poseSet ?? '',
       s.returnIntent ?? '',
       s.operatorPresent === null || s.operatorPresent === undefined ? '' : (s.operatorPresent ? 'yes' : 'no'),
+      s.alignScore ?? '',
+      s.alignLocked === null || s.alignLocked === undefined ? '' : (s.alignLocked ? 'yes' : 'no'),
       s.captureWidth ?? '', s.captureHeight ?? '',
       resolutionTier(s.captureWidth),
       s.meanConfidence ?? '',
