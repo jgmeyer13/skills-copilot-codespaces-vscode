@@ -1,0 +1,15 @@
+import { chromium } from '@playwright/test'
+const GL = ['--use-angle=swiftshader','--enable-unsafe-swiftshader','--use-gl=angle','--disable-gpu-sandbox','--no-sandbox','--disable-dev-shm-usage']
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: GL })
+const page = await b.newPage({ viewport: { width: 1440, height: 900 } })
+page.on('pageerror', e => console.log('PAGEERROR', e.message))
+await page.goto('http://127.0.0.1:4300/', { waitUntil: 'load' })
+await page.waitForTimeout(3000)
+const read = () => page.evaluate(() => window.__podium ? ({ t: Math.round(window.__podium.t), frames: window.__podium.frames, clock: window.__podium.clock, speed: window.__podium.speed, paused: window.__podium.paused }) : 'NO BRIDGE')
+console.log('a', JSON.stringify(await read()))
+await page.waitForTimeout(4000)
+console.log('b', JSON.stringify(await read()))
+await page.locator('[data-speed="30"]').click()
+await page.waitForTimeout(4000)
+console.log('c', JSON.stringify(await read()))
+await b.close()

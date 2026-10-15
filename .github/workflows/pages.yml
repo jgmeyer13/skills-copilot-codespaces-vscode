@@ -1,0 +1,60 @@
+# Publish the dashboard to GitHub Pages.
+#
+# Deliberately manual: this makes the app public, so nothing is deployed until
+# someone presses the button. To use it once —
+#
+#   1. Settings → Pages → Build and deployment → Source: GitHub Actions
+#   2. Actions → Publish dashboard → Run workflow (pick this branch)
+#
+# The Vite build uses a relative base, so it works at a project-site subpath
+# with no extra configuration.
+
+name: Publish dashboard
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deploys at once; let a newer one wait rather than cancel.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Typecheck before publishing: a broken build should not reach a URL.
+      - run: npm run typecheck
+
+      - run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

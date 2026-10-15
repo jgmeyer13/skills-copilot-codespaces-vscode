@@ -1,0 +1,69 @@
+@import './tokens.css';
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+:where(button, input, select, textarea) {
+  font: inherit;
+  color: inherit;
+}
+
+/* One visible focus treatment everywhere, never removed. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.app-shell {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.scene-canvas, .scene-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+}
+
+.scene-placeholder { background: linear-gradient(180deg, #0b1724 0%, #06090d 100%); }
+
+.boot {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  gap: var(--s4);
+  background: var(--ink);
+  z-index: 50;
+}
+.boot-mark { display: flex; align-items: center; gap: var(--s4); }
+.boot-title {
+  font-size: var(--fs-xl);
+  letter-spacing: var(--track-tight);
+  font-weight: 600;
+}
+.boot-sub {
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  color: var(--text-3);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}

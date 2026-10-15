@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Podium Control</title>
+
+<style>
+/*
+ * PODIUM — pod network control
+ *
+ * Dark room, lit objects. The chrome is glass over a 3D gym floor, because the
+ * product is a lighting instrument and the interface should look like it knows
+ * that. Structure comes from hairlines and a strict type scale; colour is
+ * reserved for the three things that carry meaning — pod state, lighting
+ * preset, and alert severity.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --bg:        #07090c;
+  --bg-2:      #0b0e13;
+  --glass:     rgba(13, 17, 23, 0.74);
+  --glass-up:  rgba(18, 23, 31, 0.92);
+  --edge:      rgba(255, 255, 255, 0.09);
+  --hair:      rgba(255, 255, 255, 0.07);
+
+  --text:      #eef2f7;
+  --text-2:    #9aa7b8;
+  --text-3:    #64748b;
+
+  --free:      #3ddc84;
+  --busy:      #ff4d57;
+  --warn:      #f5a524;
+  --info:      #5aa9ff;
+  --idle:      #566577;
+
+  /* The four lighting presets, used in the 3D scene and the UI alike. */
+  --stage:     #ffb867;
+  --noir:      #cfd8e6;
+  --red:       #ff3b5c;
+  --halo:      #eaf4ff;
+
+  --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Inter, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', SFMono-Regular, 'JetBrains Mono', Menlo, Consolas, monospace;
+
+  --fs-micro: 0.625rem;
+  --fs-small: 0.6875rem;
+  --fs-body:  0.75rem;
+  --fs-base:  0.8125rem;
+  --fs-lg:    0.9375rem;
+  --fs-xl:    1.25rem;
+  --fs-stat:  1.75rem;
+
+  --s1: 2px; --s2: 4px; --s3: 8px; --s4: 12px; --s5: 16px; --s6: 24px; --s7: 32px;
+  --r-sm: 4px; --r-md: 7px; --r-lg: 12px; --r-xl: 18px;
+
+  --topbar-h: 54px;
+  --left-w: 296px;
+  --right-w: 332px;
+
+  --shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--fs-base);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+button:focus-visible, [tabindex]:focus-visible, input:focus-visible {
+  outline: 2px solid var(--info); outline-offset: 2px; border-radius: var(--r-sm);
+}
+
+/* ── Shell ─────────────────────────────────────────────────────────────── */
+
+#app { position: fixed; inset: 0; }
+
+/* width/height are not optional here: a canvas is a replaced element, so
+   `inset: 0` alone leaves it at its intrinsic 300x150 and the scene renders
+   into a postage stamp in the corner. */
+#scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.ui {
+  position: absolute; inset: 0; z-index: 2;
+  display: grid;
+  /* minmax(0, 1fr), not 1fr: a grid track defaults to max-content, so the top
+     bar's natural width was setting the width of every row beneath it and
+     pushing the whole dashboard off a phone screen. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--topbar-h) minmax(0, 1fr) auto;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  pointer-events: none;
+}
+/*
+ * Pointer routing.
+ *
+ * `.ui > *` was handing pointer-events back to `.stage`, which spans the whole
+ * middle of the screen — so the 3D canvas underneath got nothing. Clicking a
+ * pod in the world, dragging to orbit and scrolling to zoom were all dead, and
+ * nothing looked wrong in a screenshot.
+ *
+ * So the layout containers stay transparent to the pointer and only things
+ * that are themselves a surface take events back. The gaps between panels are
+ * the world, and they have to behave like it.
+ */
+.stage, .centre, .dock, .rail, .device, .kpis { pointer-events: none; }
+.topbar, .card, .kpi, .transport, .tabs, .screen, .feed, .sheet-wrap { pointer-events: auto; }
+.ui button, .ui input, .ui select, .ui label { pointer-events: auto; }
+
+/* ── Top bar ───────────────────────────────────────────────────────────── */
+
+.topbar {
+  display: flex; align-items: center; gap: var(--s5); min-width: 0;
+  padding: 0 max(var(--s5), env(safe-area-inset-right, 0px)) 0 max(var(--s5), env(safe-area-inset-left, 0px));
+  background: linear-gradient(180deg, rgba(7, 9, 12, 0.96), rgba(7, 9, 12, 0.72));
+  border-bottom: 1px solid var(--hair);
+  backdrop-filter: blur(14px);
+}
+
+.brand { display: flex; align-items: center; gap: var(--s3); min-width: 0; flex: 0 1 auto; }
+.brand-mark { width: 22px; height: 22px; flex: 0 0 auto; }
+.brand-word { font-size: var(--fs-lg); font-weight: 650; letter-spacing: 0.1em; white-space: nowrap; }
+.brand-word i { font-style: normal; color: var(--free); }
+.brand-sub {
+  font-size: var(--fs-micro); color: var(--text-3); letter-spacing: 0.14em;
+  text-transform: uppercase; margin-left: var(--s3); padding-left: var(--s3);
+  border-left: 1px solid var(--hair);
+}
+
+.site-pick {
+  display: flex; align-items: center; gap: var(--s2); min-width: 0;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--edge);
+  border-radius: var(--r-md); padding: 5px var(--s3);
+}
+.site-pick select {
+  min-width: 0; max-width: 100%; text-overflow: ellipsis;
+  background: none; border: 0; color: var(--text); font: inherit;
+  font-size: var(--fs-body); font-weight: 600; padding: 0 var(--s2) 0 0;
+}
+.site-pick select option { background: #11161d; }
+
+.spacer { flex: 1 1 auto; }
+
+.clock { text-align: right; line-height: 1.15; }
+.clock b { font-size: var(--fs-lg); font-weight: 600; letter-spacing: 0.01em; }
+.clock span { display: block; font-size: var(--fs-micro); color: var(--text-3); letter-spacing: 0.1em; text-transform: uppercase; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--fs-small); color: var(--text-2);
+  border: 1px solid var(--edge); border-radius: 999px; padding: 4px var(--s3);
+  background: rgba(255,255,255,0.03);
+}
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--free); box-shadow: 0 0 9px currentColor; color: var(--free); }
+.dot.busy { background: var(--busy); color: var(--busy); }
+.dot.warn { background: var(--warn); color: var(--warn); }
+.dot.idle { background: var(--idle); color: var(--idle); box-shadow: none; }
+
+.linkbtn {
+  font-size: var(--fs-body); color: var(--text-2); border: 1px solid var(--edge);
+  border-radius: var(--r-md); padding: 5px var(--s4); background: rgba(255,255,255,0.03);
+}
+.linkbtn:hover { color: var(--text); border-color: rgba(255,255,255,0.22); }
+.linkbtn.on { color: #06240f; background: var(--free); border-color: var(--free); font-weight: 650; }
+
+/* ── Stage ─────────────────────────────────────────────────────────────── */
+
+.stage {
+  display: grid;
+  grid-template-columns: var(--left-w) minmax(0, 1fr) var(--right-w);
+  gap: var(--s4);
+  padding: var(--s4) max(var(--s4), env(safe-area-inset-right, 0px)) 0 max(var(--s4), env(safe-area-inset-left, 0px));
+  min-height: 0;
+}
+.rail { display: flex; flex-direction: column; gap: var(--s4); min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.rail::-webkit-scrollbar { width: 5px; }
+.rail::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+.centre { pointer-events: none; display: flex; flex-direction: column; justify-content: flex-end; }
+
+/* ── Card ──────────────────────────────────────────────────────────────── */
+
+.card {
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.card-head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  padding: var(--s4) var(--s4) var(--s3);
+  border-bottom: 1px solid var(--hair);
+}
+.card-title { font-size: var(--fs-micro); letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); font-weight: 600; }
+.card-body { padding: var(--s4); }
+.card-body.tight { padding: var(--s3) var(--s4) var(--s4); }
+
+/* ── KPIs ──────────────────────────────────────────────────────────────── */
+
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.kpi {
+  background: var(--glass); backdrop-filter: blur(18px);
+  border: 1px solid var(--edge); border-left: 2px solid var(--free);
+  border-radius: var(--r-md); padding: var(--s3) var(--s4);
+}
+.kpi.warn { border-left-color: var(--warn); }
+.kpi.info { border-left-color: var(--info); }
+.kpi.busy { border-left-color: var(--busy); }
+.kpi dt { font-size: var(--fs-micro); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); margin: 0 0 3px; }
+.kpi dd { margin: 0; display: flex; align-items: baseline; gap: 5px; }
+.kpi .val { font-size: var(--fs-stat); font-weight: 600; line-height: 1; letter-spacing: -0.02em; }
+.kpi .suf { font-size: var(--fs-small); color: var(--text-3); }
+.kpi .trend { font-size: var(--fs-micro); margin-left: auto; color: var(--text-3); }
+.kpi .trend.up { color: var(--free); }
+.kpi .trend.down { color: var(--busy); }
+
+/* ── Pod list ──────────────────────────────────────────────────────────── */
+
+.pods { display: flex; flex-direction: column; }
+.pod {
+  display: grid; grid-template-columns: 30px 1fr auto; gap: var(--s3);
+  align-items: center; width: 100%; text-align: left;
+  padding: var(--s3) var(--s4); border-bottom: 1px solid var(--hair);
+  transition: background 120ms ease;
+}
+.pod:last-child { border-bottom: 0; }
+.pod:hover { background: rgba(255,255,255,0.045); }
+.pod.sel { background: rgba(90,169,255,0.1); box-shadow: inset 2px 0 0 var(--info); }
+.pod-id { font-size: var(--fs-small); font-weight: 650; color: var(--text-2); letter-spacing: 0.04em; }
+.pod-mid { min-width: 0; }
+.pod-state { font-size: var(--fs-body); font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pod-who { font-size: var(--fs-micro); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pod-right { display: flex; align-items: center; gap: var(--s3); }
+.bar { width: 44px; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.12); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--free); transition: width 220ms linear; }
+.swatch { width: 9px; height: 9px; border-radius: 2px; box-shadow: 0 0 8px currentColor; }
+
+/* ── Alerts ────────────────────────────────────────────────────────────── */
+
+.alert {
+  display: grid; grid-template-columns: 3px 1fr; gap: var(--s3);
+  width: 100%; text-align: left; padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--hair);
+}
+.alert:last-child { border-bottom: 0; }
+.alert:hover { background: rgba(255,255,255,0.045); }
+.alert i.rail-c { border-radius: 2px; background: var(--warn); }
+.alert.high i.rail-c { background: var(--busy); }
+.alert.low i.rail-c { background: var(--info); }
+.alert-t { font-size: var(--fs-body); font-weight: 550; }
+.alert-d { font-size: var(--fs-micro); color: var(--text-3); margin-top: 2px; line-height: 1.45; }
+.empty { padding: var(--s5) var(--s4); text-align: center; color: var(--text-3); font-size: var(--fs-body); }
+
+/* ── Device (pod screen / phone) ───────────────────────────────────────── */
+
+.device { display: flex; flex-direction: column; gap: var(--s3); min-height: 0; }
+.tabs { display: flex; gap: var(--s2); background: rgba(255,255,255,0.04); border: 1px solid var(--edge); border-radius: var(--r-md); padding: 3px; }
+.tabs button {
+  flex: 1; font-size: var(--fs-micro); letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 6px 4px; border-radius: var(--r-sm); color: var(--text-3); font-weight: 600;
+}
+.tabs button[aria-selected='true'] { background: rgba(255,255,255,0.1); color: var(--text); }
+
+/*
+ * Sized by height, not by aspect-ratio. `aspect-ratio` with `max-height` in a
+ * flex column collapsed the panel to a sliver on a phone and let it paint over
+ * the cards above it; a clamped height is predictable in both layouts and the
+ * inner content is flex, so it fills whatever it is given.
+ */
+.screen {
+  position: relative; border-radius: var(--r-xl); overflow: hidden;
+  border: 1px solid var(--edge); background: #05070a;
+  box-shadow: var(--shadow);
+  width: 100%; height: clamp(320px, 43vh, 520px); flex: 0 0 auto;
+}
+.screen-inner { position: absolute; inset: 0; display: flex; flex-direction: column; }
+/* The action row is pinned to the bottom of the panel and the body above it
+   leaves room, rather than the row being part of what gets redrawn. */
+#phone-actions { position: absolute; left: 0; right: 0; bottom: 0; }
+/* `.ph-actions` sets `display: flex`, which beats the `hidden` attribute's UA
+   `display: none` — so the phone's buttons sat on top of the pod screen. */
+#phone-actions[hidden] { display: none; }
+/* The app view is taller than the panel on short screens, so it scrolls above
+   the pinned action row rather than painting over it. */
+.screen[data-tab='app'] .screen-inner { bottom: 118px; overflow-y: auto; scrollbar-width: none; }
+.screen[data-tab='app'] .screen-inner::-webkit-scrollbar { width: 0; }
+
+/* pod screen */
+.ps-top { display: flex; align-items: center; justify-content: space-between; padding: var(--s4); font-size: var(--fs-micro); color: var(--text-3); letter-spacing: 0.1em; text-transform: uppercase; }
+.ps-stage { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s4); padding: var(--s4); text-align: center; position: relative; }
+.ps-head { font-size: var(--fs-xl); font-weight: 650; letter-spacing: -0.01em; }
+.ps-sub { font-size: var(--fs-body); color: var(--text-2); max-width: 24ch; line-height: 1.5; }
+.ps-count { font-size: 64px; font-weight: 300; letter-spacing: -0.04em; line-height: 1; }
+.ps-rec { display: flex; align-items: center; gap: 6px; font-size: var(--fs-body); font-weight: 650; color: var(--busy); }
+.ps-rec .dot { background: var(--busy); color: var(--busy); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0.2; } }
+.ps-foot { flex: 0 0 auto; padding: var(--s4); border-top: 1px solid var(--hair); display: flex; gap: var(--s3); align-items: center; justify-content: space-between; }
+.qr { width: 74px; height: 74px; flex: 0 0 auto; border-radius: var(--r-md); background: #fff; padding: 7px; }
+.qr svg { width: 100%; height: 100%; display: block; }
+.silhouette { width: 94px; max-height: 42%; opacity: 0.9; }
+
+.poses { display: flex; gap: 5px; }
+.poses i { width: 22px; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.16); }
+.poses i.done { background: var(--free); }
+.poses i.now { background: var(--busy); }
+
+/* phone app */
+.ph-head { padding: var(--s4) var(--s4) var(--s3); border-bottom: 1px solid var(--hair); }
+.ph-name { font-size: var(--fs-base); font-weight: 650; }
+.ph-meta { font-size: var(--fs-micro); color: var(--text-3); margin-top: 2px; }
+.ph-hero { flex: 1; position: relative; background: #0a0d12; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.ph-hero .wash { position: absolute; inset: 0; opacity: 0.5; }
+/* Then and now, the same size, side by side. The comparison is the product. */
+.ph-compare { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); padding: var(--s3) var(--s4) 0; }
+.ph-compare figure { margin: 0; }
+.ph-compare .frame {
+  aspect-ratio: 1 / 1; border-radius: var(--r-md); border: 1px solid var(--hair);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.ph-compare figure:last-child .frame { border-color: rgba(61, 220, 132, 0.4); }
+.ph-compare figcaption {
+  display: flex; justify-content: space-between; align-items: baseline; gap: var(--s2);
+  margin-top: 5px; font-size: var(--fs-micro); color: var(--text-3);
+}
+.ph-compare figcaption b { color: var(--text-2); font-size: var(--fs-small); font-weight: 600; }
+
+.ph-verdict {
+  padding: var(--s3) var(--s4) 0; font-size: var(--fs-small); font-weight: 650;
+}
+.ph-actions { gap: 5px; padding: var(--s2) var(--s4) var(--s3); }
+.ph-verdict span { display: block; font-weight: 400; color: var(--text-3); font-size: var(--fs-micro); margin-top: 2px; line-height: 1.5; }
+
+.ph-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: var(--s3) var(--s4); }
+.ph-strip div { aspect-ratio: 3/4; border-radius: var(--r-sm); border: 1px solid var(--hair); position: relative; overflow: hidden; }
+.ph-strip div.pick { border-color: var(--free); box-shadow: 0 0 0 1px var(--free); }
+.ph-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s3); padding: var(--s3) var(--s4); border-top: 1px solid var(--hair); }
+.ph-stat dt { font-size: var(--fs-micro); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; }
+.ph-stat dd { margin: 2px 0 0; font-size: var(--fs-lg); font-weight: 600; }
+.ph-stat .d { font-size: var(--fs-micro); font-weight: 500; }
+.up { color: var(--free); } .down { color: var(--busy); }
+.ph-actions { padding: var(--s3) var(--s4) var(--s4); display: flex; flex-direction: column; gap: var(--s2); }
+.ph-actions button {
+  width: 100%; padding: 7px; border-radius: var(--r-md); font-size: var(--fs-body); font-weight: 600;
+  background: rgba(255,255,255,0.08); border: 1px solid var(--edge);
+}
+.ph-actions button.primary { background: var(--free); color: #052712; border-color: var(--free); }
+.ph-actions button:hover { background: rgba(255,255,255,0.14); }
+.ph-actions button.primary:hover { filter: brightness(1.08); }
+
+/* ── Presets ───────────────────────────────────────────────────────────── */
+
+.presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s2); }
+.preset {
+  border: 1px solid var(--edge); border-radius: var(--r-md); padding: var(--s3) 4px;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  font-size: var(--fs-micro); letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); font-weight: 600;
+}
+.preset:hover { border-color: rgba(255,255,255,0.25); color: var(--text-2); }
+.preset[aria-pressed='true'] { color: var(--text); border-color: currentColor; background: rgba(255,255,255,0.05); }
+.preset .chip { width: 100%; height: 16px; border-radius: 3px; }
+
+/* ── Feed / transport ──────────────────────────────────────────────────── */
+
+.dock {
+  display: grid; grid-template-columns: var(--left-w) minmax(0, 1fr) var(--right-w);
+  gap: var(--s4);
+  padding: var(--s4) max(var(--s4), env(safe-area-inset-right, 0px)) var(--s4) max(var(--s4), env(safe-area-inset-left, 0px));
+  align-items: end;
+}
+.transport { display: flex; align-items: center; gap: var(--s2); background: var(--glass); border: 1px solid var(--edge); border-radius: var(--r-md); padding: var(--s2) var(--s3); backdrop-filter: blur(16px); }
+.transport .sp { font-size: var(--fs-micro); padding: 4px 7px; border-radius: var(--r-sm); color: var(--text-3); font-weight: 650; }
+.transport .sp[aria-pressed='true'] { background: rgba(255,255,255,0.12); color: var(--text); }
+.transport .seed { margin-left: auto; font-size: var(--fs-micro); color: var(--text-3); }
+
+.feed { max-height: 164px; overflow-y: auto; scrollbar-width: thin; }
+.feed::-webkit-scrollbar { width: 5px; }
+.feed::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+.ev { display: grid; grid-template-columns: 54px 20px 1fr auto; gap: var(--s3); align-items: center; padding: 5px var(--s4); font-size: var(--fs-body); border-bottom: 1px solid var(--hair); }
+.ev:last-child { border-bottom: 0; }
+.ev time { font-size: var(--fs-micro); color: var(--text-3); }
+.ev .who { color: var(--text-2); }
+.ev .tag { font-size: var(--fs-micro); color: var(--text-3); letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* ── Sheet (the case / risks) ──────────────────────────────────────────── */
+
+.sheet-wrap { position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center; padding: var(--s5); background: rgba(3,5,8,0.72); backdrop-filter: blur(6px); }
+.sheet-wrap.open { display: flex; }
+.sheet {
+  width: min(880px, 100%); max-height: min(86vh, 760px); overflow-y: auto;
+  background: var(--glass-up); border: 1px solid var(--edge); border-radius: var(--r-lg); box-shadow: var(--shadow);
+}
+.sheet-head { position: sticky; top: 0; background: var(--glass-up); display: flex; align-items: center; justify-content: space-between; padding: var(--s5); border-bottom: 1px solid var(--hair); }
+.sheet-head h2 { margin: 0; font-size: var(--fs-lg); font-weight: 650; }
+.sheet-body { padding: var(--s5); display: grid; gap: var(--s6); }
+.sheet h3 { margin: 0 0 var(--s3); font-size: var(--fs-micro); letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); }
+.sheet p { margin: 0 0 var(--s3); font-size: var(--fs-body); color: var(--text-2); line-height: 1.6; max-width: 72ch; }
+.sheet p b, .sheet li b { color: var(--text); font-weight: 600; }
+.sheet ul { margin: 0; padding-left: 1.1em; }
+.sheet li { font-size: var(--fs-body); color: var(--text-2); line-height: 1.6; margin-bottom: var(--s2); }
+
+.model { display: grid; grid-template-columns: repeat(auto-fit, minmax(188px, 1fr)); gap: var(--s4); }
+.slider label { display: flex; justify-content: space-between; font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); margin-bottom: 5px; }
+.slider label b { color: var(--text); font-family: var(--mono); font-size: var(--fs-body); }
+.slider input { width: 100%; accent-color: var(--free); }
+.out { display: grid; grid-template-columns: repeat(auto-fit, minmax(138px, 1fr)); gap: var(--s3); margin-top: var(--s5); }
+.out div { border: 1px solid var(--edge); border-radius: var(--r-md); padding: var(--s3) var(--s4); background: rgba(255,255,255,0.03); }
+.out dt { font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); }
+.out dd { margin: 3px 0 0; font-size: var(--fs-xl); font-weight: 600; }
+
+table.risks { width: 100%; border-collapse: collapse; font-size: var(--fs-body); }
+table.risks th { text-align: left; font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-3); padding: 0 var(--s4) var(--s3) 0; font-weight: 600; }
+table.risks td { padding: var(--s3) var(--s4) var(--s3) 0; border-top: 1px solid var(--hair); color: var(--text-2); vertical-align: top; line-height: 1.55; }
+table.risks td:first-child { color: var(--text); font-weight: 550; white-space: nowrap; }
+
+/* ── Boot ──────────────────────────────────────────────────────────────── */
+
+.boot { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; background: var(--bg); transition: opacity 520ms ease; }
+.boot.gone { opacity: 0; pointer-events: none; }
+.boot-in { text-align: center; }
+.boot-word { font-size: 2rem; font-weight: 650; letter-spacing: 0.16em; }
+.boot-word i { font-style: normal; color: var(--free); }
+.boot-sub { margin-top: var(--s3); font-size: var(--fs-body); color: var(--text-3); letter-spacing: 0.04em; }
+.boot-bar { margin: var(--s5) auto 0; width: 168px; height: 2px; background: rgba(255,255,255,0.1); overflow: hidden; border-radius: 2px; }
+.boot-bar i { display: block; height: 100%; width: 40%; background: var(--free); animation: slide 1.1s ease-in-out infinite; }
+@keyframes slide { 0% { transform: translateX(-110%); } 100% { transform: translateX(290%); } }
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+
+@media (max-width: 1180px) {
+  :root { --left-w: 260px; --right-w: 286px; }
+}
+@media (max-width: 1000px) {
+  /*
+   * Rows sized by content, not by the viewport. `minmax(0, 1fr)` kept the
+   * middle row at screen height while the stacked rails grew past it, so the
+   * panels spilled out of their own row and painted over the one below.
+   */
+  /* Not a grid at this width. A grid in a viewport-height container keeps
+     sizing its rows against that height however the tracks are declared, so
+     the stacked rails overflowed their own row and painted over the one
+     below. Block flow has no such opinion: it is as tall as its content. */
+  .ui { display: block; overflow-y: auto; overflow-x: hidden; }
+  /* No longer a grid row, so it has to carry its own height. */
+  .topbar { position: sticky; top: 0; z-index: 20; height: var(--topbar-h); }
+  .stage { grid-template-columns: 1fr; padding-bottom: var(--s4); }
+  .centre { display: none; }
+  .rail { overflow: visible; }
+  .stage { display: grid; }
+  .dock { grid-template-columns: 1fr; }
+  .feed { max-height: 190px; }
+  .screen { height: clamp(420px, 64vh, 560px); max-width: 340px; margin: 0 auto; }
+  .device { align-items: stretch; }
+  .tabs { max-width: 340px; margin: 0 auto; width: 100%; }
+}
+@media (max-width: 760px) {
+  /* The bar carries eight controls and will not fit. It sheds in order of what
+     a phone viewer can do without: the strapline, the queue pill, the clock's
+     weekday, then the two sheets, which stay reachable from the feed card. */
+  .brand-sub, .clock span, #queue-pill { display: none; }
+  .topbar { gap: var(--s3); padding-left: var(--s4); padding-right: var(--s4); }
+  .site-pick select { max-width: 42vw; }
+}
+@media (max-width: 560px) {
+  /* The mark carries the brand on its own here; the word is the first thing
+     that can go, and the two sheet buttons shorten rather than disappear
+     because they are the argument, not decoration. */
+  .brand-word { display: none; }
+  .kpis { grid-template-columns: 1fr 1fr; }
+  .sheet-body { padding: var(--s4); }
+  .linkbtn { padding: 5px var(--s3); font-size: var(--fs-small); }
+  .site-pick { padding: 4px var(--s2); }
+  .site-pick select { font-size: var(--fs-small); }
+  .ev { grid-template-columns: 46px 20px 1fr; }
+  .ev .who { display: none; }
+  .topbar { gap: var(--s2); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <canvas id="scene"></canvas>
+
+  <div class="ui">
+    <!-- ── Top bar ── -->
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="2.5" y="3" width="19" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6" opacity="0.5"/>
+          <circle cx="12" cy="10" r="3.4" stroke="#3ddc84" stroke-width="1.8"/>
+          <path d="M6 21h12" stroke="#3ddc84" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        <span class="brand-word">PODIUM<i>.</i></span>
+        <span class="brand-sub">Pod network control</span>
+      </div>
+
+      <div class="site-pick">
+        <span class="dot" id="site-dot" aria-hidden="true"></span>
+        <select id="site-select" aria-label="Site"></select>
+      </div>
+
+      <span class="pill" id="queue-pill"><span class="dot idle"></span><span id="queue-text">No queue</span></span>
+
+      <div class="spacer"></div>
+
+      <button class="linkbtn" id="btn-case">The case</button>
+      <button class="linkbtn" id="btn-risks">Risks</button>
+      <button class="linkbtn" id="btn-tour">Tour</button>
+
+      <div class="clock">
+        <b class="mono" id="clock-time">06:00</b>
+        <span id="clock-day">Monday</span>
+      </div>
+    </header>
+
+    <!-- ── Stage ── -->
+    <div class="stage">
+      <div class="rail">
+        <dl class="kpis" id="kpis"></dl>
+
+        <section class="card">
+          <div class="card-head"><h2 class="card-title">Pods</h2><span class="card-title" id="pods-sub"></span></div>
+          <div class="pods" id="pods"></div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h2 class="card-title">Attention</h2><span class="card-title" id="alerts-sub"></span></div>
+          <div id="alerts"></div>
+        </section>
+      </div>
+
+      <div class="centre"></div>
+
+      <div class="rail device">
+        <div class="tabs" role="tablist" aria-label="Product view">
+          <button role="tab" id="tab-pod" aria-selected="true" aria-controls="screen">Pod screen</button>
+          <button role="tab" id="tab-app" aria-selected="false" aria-controls="screen">Member app</button>
+        </div>
+
+        <div class="screen" id="screen">
+          <div class="screen-inner" id="screen-inner"></div>
+          <!-- Outside the rebuilt body on purpose: these are the only buttons
+               on this panel, and a button that is replaced on a timer cannot
+               be pressed. -->
+          <div class="ph-actions" id="phone-actions" hidden>
+            <button class="primary" data-act="keep">Save to profile</button>
+            <button data-act="wipe">Send &amp; wipe</button>
+            <button data-act="reel">Make reel</button>
+          </div>
+        </div>
+
+        <section class="card">
+          <div class="card-head"><h2 class="card-title">Lighting</h2><span class="card-title" id="preset-name">Stage</span></div>
+          <div class="card-body tight"><div class="presets" id="presets"></div></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ── Dock ── -->
+    <div class="dock">
+      <div class="transport" role="group" aria-label="Simulation controls">
+        <button class="sp" id="sp-pause" aria-pressed="false" title="Pause (space)">❚❚</button>
+        <button class="sp" data-speed="1" aria-pressed="true">1×</button>
+        <button class="sp" data-speed="6" aria-pressed="false">6×</button>
+        <button class="sp" data-speed="30" aria-pressed="false">30×</button>
+        <span class="seed mono" id="seed-label">seed 7310</span>
+      </div>
+
+      <section class="card">
+        <div class="card-head"><h2 class="card-title">Session feed</h2><span class="card-title" id="feed-sub"></span></div>
+        <div class="feed" id="feed"></div>
+      </section>
+
+      <div></div>
+    </div>
+  </div>
+
+  <!-- ── Sheets ── -->
+  <div class="sheet-wrap" id="sheet-wrap" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2 id="sheet-title">The case</h2>
+        <button class="linkbtn" id="sheet-close">Close ✕</button>
+      </div>
+      <div class="sheet-body" id="sheet-body"></div>
+    </div>
+  </div>
+
+  <div class="boot" id="boot">
+    <div class="boot-in">
+      <div class="boot-word">PODIUM<i>.</i></div>
+      <div class="boot-sub">Same light. Every time.</div>
+      <div class="boot-bar"><i></i></div>
+    </div>
+  </div>
+</div>
+
+<!-- Three.js is served alongside this page rather than from a CDN, and
+     imported by relative path rather than through an import map: the page then
+     depends on nothing outside its own directory. -->
+<script type="module" src="./app.js"></script>
+</body>
+</html>

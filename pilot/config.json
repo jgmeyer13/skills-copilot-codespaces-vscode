@@ -1,0 +1,130 @@
+{
+  "_comment": "Everything an operator or a lawyer might change without touching code. Loaded at startup; edit and reload the page.",
+
+  "brand": {
+    "name": "PODIUM",
+    "workingName": true,
+    "tagline": "Same light. Every time."
+  },
+
+  "pilot": {
+    "venue": "Aspire Fitness",
+    "city": "Stellenbosch",
+    "country": "South Africa",
+    "currency": "ZAR",
+    "currencySymbol": "R",
+    "pricePerSession": 20,
+    "plannedWeeks": 4,
+    "openHour": 6,
+    "closeHour": 21
+  },
+
+  "responsibleParty": {
+    "_comment": "POPIA s1. Who decides the purpose and means of processing, and who members contact about their information. A lawyer should confirm whether this is the gym or PODIUM, and whether an operator agreement under s20-21 is needed between them.",
+    "name": "PODIUM Pilot (sole operator)",
+    "contactEmail": "CHANGE-ME@example.co.za",
+    "contactPhone": "CHANGE-ME",
+    "informationOfficer": "CHANGE-ME"
+  },
+
+  "languages": {
+    "_comment": "Each entry is a file in consent/. The first is the default. A member can switch at any point on the consent screen, and which language they read is recorded with their consent.",
+    "en": { "label": "English", "file": "consent/consent.en.md" },
+    "af": { "label": "Afrikaans", "file": "consent/consent.af.md" }
+  },
+
+  "privacy": {
+    "_comment": "The settings that carry the most legal weight. Changing any of these changes what the consent screen promises, so change both together.",
+
+    "memberIdMode": "phone-hash",
+    "_memberIdMode": [
+      "How a returning member is recognised. Two honest options, and the difference is legal, not technical:",
+      "",
+      "'phone-hash' — the number is salted and hashed on this device and the number itself is never written down. Convenient: nothing for the member to remember. But the salt lives on the same laptop as the hashes, and South African mobile numbers are a space of about 100 million, which a laptop can hash in seconds. So this is PSEUDONYMISED personal information, not anonymous, and it stays in scope of POPIA. The consent text must not claim otherwise.",
+      "",
+      "'code' — the device generates a random code (about 36^6, roughly 2 billion) and the member keeps it on their phone. Nothing derived from a person is stored at all, so the record genuinely is not personal information. The cost is real: a member who loses the code loses their history, and some will.",
+      "",
+      "Pick one before the pilot. If you pick 'code', consent.en.md needs its 'What we keep about you' section changed to match."
+    ],
+
+    "phoneSalt": "CHANGE-ME-before-the-pilot-any-long-random-string",
+    "_phoneSalt": "Only used by 'phone-hash'. It raises the cost of a brute force; it does not make one impossible. Treat it as a speed bump, not a lock.",
+
+    "minimumAge": 18,
+    "unkeptFramesPurgedAt": "end-of-day",
+    "keptFrameRetentionDays": 180,
+    "_keptFrameRetentionDays": "POPIA s14: no longer than necessary. 180 days covers a progress comparison across a season. Kept frames older than this are deleted on startup.",
+
+    "everythingStaysOnThisDevice": true,
+    "_everythingStaysOnThisDevice": "No image ever leaves this device except when the member themselves shares it. That is what keeps the pilot clear of POPIA s72 (cross-border transfer) entirely, so do not add a cloud backup without legal advice."
+  },
+
+  "camera": {
+    "_comment": "The pilot is designed to run off whatever good camera is already in the room — a phone over Continuity Camera or DroidCam, or a mirrorless in webcam mode — because image quality is one of the things being tested.",
+    "preferMaxResolution": true,
+    "idealWidth": 3840,
+    "idealHeight": 2160,
+    "rememberDeviceId": true
+  },
+
+  "capture": {
+    "_comment": "The 30 seconds, as a script. Two sets, chosen by the member before recording. The progress shot is deliberately IDENTICAL in both — it is the frame that has to line up with the same person's next visit, so it cannot depend on which set they picked that day.",
+    "totalSeconds": 30,
+    "maxPeople": 3,
+
+    "_progressShot": "Shown to the member as 'Progress shot — same spot, same light, every time.' It is labelled now. An earlier version hid which frame this was, on the reasoning that an interface explaining the measurement to its subject destroys it. That was overruled deliberately: see DECISIONS.md, which records what the keep-rate thresholds now mean as a result.",
+
+    "defaultSet": "physique",
+    "sets": {
+      "physique": {
+        "label": "Physique",
+        "blurb": "Front double biceps, side chest, back double biceps",
+        "steps": [
+          { "id": "measure", "kind": "measurement", "pose": "front_relaxed", "seconds": 7, "title": "Stand on the mark", "cue": "Arms relaxed by your side, feet on the ring, look at the camera." },
+          { "id": "pose1", "kind": "post", "pose": "front_double_bicep", "seconds": 7, "title": "Front double biceps", "cue": "Arms up and out, wrists curled in. Breathe out." },
+          { "id": "pose2", "kind": "post", "pose": "side_chest", "seconds": 6, "title": "Side chest", "cue": "Turn to your right. Near arm across, press the chest forward." },
+          { "id": "pose3", "kind": "post", "pose": "back_double_bicep", "seconds": 6, "title": "Back double biceps", "cue": "Turn around. Elbows up, squeeze the shoulder blades." },
+          { "id": "candid", "kind": "candid", "pose": "any", "seconds": 4, "title": "However you like", "cue": "Move. Mess about. This one is for the post." }
+        ]
+      },
+      "athlete": {
+        "label": "Athlete",
+        "blurb": "Relaxed front, relaxed side, race-ready stance",
+        "steps": [
+          { "id": "measure", "kind": "measurement", "pose": "front_relaxed", "seconds": 7, "title": "Stand on the mark", "cue": "Arms relaxed by your side, feet on the ring, look at the camera." },
+          { "id": "pose1", "kind": "post", "pose": "front_relaxed", "seconds": 7, "title": "Relaxed front", "cue": "Stand tall, arms by your side, shoulders down." },
+          { "id": "pose2", "kind": "post", "pose": "side_relaxed", "seconds": 6, "title": "Relaxed side", "cue": "Turn to your right. Arms by your side, stand tall." },
+          { "id": "pose3", "kind": "post", "pose": "race_ready", "seconds": 6, "title": "Race ready", "cue": "One foot forward, lean in, like the gun is about to go." },
+          { "id": "candid", "kind": "candid", "pose": "any", "seconds": 4, "title": "However you like", "cue": "Move. Mess about. This one is for the post." }
+        ]
+      }
+    }
+  },
+
+  "light": {
+    "_comment": "The pilot runs one fixed setup so the measurement frames are comparable. Presets come later, if members ask for them.",
+    "setup": "noir",
+    "description": "One hard top light, roughly 300mm above and 200mm in front of the mark, pointed down at the shoulders. Nothing else on. Curtain closed."
+  },
+
+  "decisionRules": {
+    "_comment": "Pre-registered before the pilot starts. The dashboard shows RAW NUMBERS ONLY until both end conditions are met, and only then scores them. See DECISIONS.md.",
+    "minimumWeeks": 4,
+    "minimumSessions": 120,
+
+    "goNoGo": {
+      "_comment": "Whether to build it at all.",
+      "returnWithin14Days": { "go": 0.30, "weak": 0.15 },
+      "keepRate": { "go": 0.55, "weak": 0.35 }
+    },
+
+    "whichProduct": {
+      "_comment": "What to build, not whether. Squad share lives here: a low squad share is not a reason to stop, it is a reason to build the solo product first.",
+      "_measurementKeptShare": "Raised from 0.45/0.2 when the progress shot became labelled. The old numbers were set for an unlabelled frame in a shuffled order, where keeping it was an unprompted choice. A labelled option should clear a higher bar before it counts as evidence. See DECISIONS.md.",
+      "measurementKeptShare": { "instrument": 0.6, "photobooth": 0.3 },
+      "squadShare": { "buildFor": 0.25 }
+    },
+
+    "medianMinutesInside": { "ceiling": 6 }
+  }
+}
