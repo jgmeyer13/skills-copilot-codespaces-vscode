@@ -26,6 +26,7 @@ import { createCapture } from './src/capture.js'
 import { newSession, closeSession, summarise, verdict, toCsv, resolutionTier } from './src/telemetry.js'
 import { L } from './src/scoring.js'
 import { silhouette } from './src/silhouettes.js'
+import { alignment, createLock } from './src/align.js'
 
 const $ = (id) => document.getElementById(id)
 const app = $('app')
@@ -692,10 +693,33 @@ function stopCamera() {
   video.srcObject = null
 }
 
+/*
+ * The mirror, which is the product.
+ *
+ * Everything else in this app is bookkeeping. This is the thirty seconds a
+ * member actually experiences, and it is where the claim that two
+ * photographs weeks apart are comparable is either earned or quietly lost.
+ *
+ * It draws four things over the live video:
+ *
+ *   the mark      — where the feet go, which is the easy part
+ *   the ghost     — the exact body that stood here last time
+ *   the skeleton  — the body standing here now
+ *   the lock      — a ring around their own hips that fills while they hold
+ *                   the position, and only completes once they have held it
+ *
+ * The cue is deliberately one instruction. Four corrections at once get none
+ * of them done, and the person reading them is half dressed in a curtained
+ * corner with a queue outside.
+ */
+
+const lock = createLock({ holdMs: 700 })
+
 function startPreview() {
   const canvas = $('overlay')
   const ctx = canvas.getContext('2d')
   const pose = () => state.poseOverride ?? state.pose
+  lock.reset()
 
   const loop = (now) => {
     if (state.screen !== 'ready') { startPreview.raf = requestAnimationFrame(loop); return }
@@ -704,25 +728,129 @@ function startPreview() {
     if (canvas.width !== w) { canvas.width = w; canvas.height = h }
     ctx.clearRect(0, 0, w, h)
     drawMark(ctx, w, h)
-    if (state.ghost) drawSkeleton(ctx, state.ghost, w, h, 'rgba(90,169,255,0.55)', 3)
+    if (state.ghost) drawSkeleton(ctx, state.ghost, w, h, 'rgba(90,169,255,0.5)', 3)
 
     const p = pose()
-    if (p) {
-      const people = p.detect(video, now)
-      if (people) {
-        const badge = $('ready-badge')
-        const ok = people.length === state.people
-        badge.classList.toggle('good', ok)
-        $('ready-badge-text').textContent = ok
-          ? people.length === 1 ? 'Got you' : `Got all ${people.length}`
-          : people.length === 0 ? 'Step into frame' : `${people.length} of ${state.people} in frame`
-        for (const lm of people) drawSkeleton(ctx, lm, w, h, 'rgba(61,220,132,0.75)', 3)
-      }
+    if (!p) { startPreview.raf = requestAnimationFrame(loop); return }
+
+    const people = p.detect(video, now) ?? []
+    const badge = $('ready-badge')
+    const ok = people.length === state.people
+    badge.classList.toggle('good', ok)
+    $('ready-badge-text').textContent = ok
+      ? people.length === 1 ? 'Got you' : `Got all ${people.length}`
+      : people.length === 0 ? 'Step into frame' : `${people.length} of ${state.people} in frame`
+
+    for (const lm of people) drawSkeleton(ctx, lm, w, h, 'rgba(61,220,132,0.78)', 3)
+
+    /*
+     * Alignment is only meaningful for one body. With three people in shot
+     * there is no single thing to line up, so the mirror says so instead of
+     * picking somebody arbitrarily and guiding them.
+     */
+    if (state.people > 1 || people.length !== 1) {
+      paintAlign(null)
+      startPreview.raf = requestAnimationFrame(loop)
+      return
     }
+
+    const a = alignment(people[0], state.ghost)
+    const held = lock.update(a.score, now)
+    paintAlign(a, held)
+    drawLockRing(ctx, people[0], w, h, a, held)
+
     startPreview.raf = requestAnimationFrame(loop)
   }
   cancelAnimationFrame(startPreview.raf)
   startPreview.raf = requestAnimationFrame(loop)
+}
+
+/**
+ * The words and the meter.
+ *
+ * Note what this does NOT do: it never disables the Start button. A member
+ * whose body, clothing or wheelchair the model reads badly must still be
+ * able to take their photographs. Alignment is advice, and advice that locks
+ * the door is not advice.
+ */
+function paintAlign(a, held) {
+  const cue = $('align-cue')
+  const meter = $('align-meter')
+  const fill = $('align-fill')
+  const stage = document.querySelector('.screen[data-id="ready"] .stage')
+
+  if (!a) {
+    cue.textContent = state.people > 1 ? 'Everyone in frame, roughly in a line' : ''
+    meter.hidden = true
+    stage.classList.remove('locked')
+    return
+  }
+
+  meter.hidden = false
+  fill.style.width = `${Math.round(a.score * 100)}%`
+  fill.classList.toggle('good', a.score >= 0.82)
+
+  const isLocked = held?.locked
+  stage.classList.toggle('locked', !!isLocked)
+  cue.textContent = isLocked
+    ? (a.hasReference ? 'Lined up with last time' : 'Good — hold it there')
+    : a.cue
+  cue.classList.toggle('good', !!isLocked)
+
+  $('begin').textContent = isLocked ? 'Start · 30 seconds' : 'Start anyway · 30 seconds'
+}
+
+/**
+ * A ring around the member's own hips, not a fixed target on the screen.
+ *
+ * It follows them, so the feedback is attached to their body rather than to a
+ * spot they have to find. The arc is the hold: it fills over three quarters
+ * of a second of staying put, and empties the moment they drift, because a
+ * lock that trips the instant somebody passes through the right place fires
+ * while they are still walking.
+ */
+function drawLockRing(ctx, lm, w, h, a, held) {
+  const hip = {
+    x: (lm[L.leftHip].x + lm[L.rightHip].x) / 2,
+    y: (lm[L.leftHip].y + lm[L.rightHip].y) / 2,
+  }
+  const sh = {
+    x: (lm[L.leftShoulder].x + lm[L.rightShoulder].x) / 2,
+    y: (lm[L.leftShoulder].y + lm[L.rightShoulder].y) / 2,
+  }
+  const cx = (1 - hip.x) * w
+  const cy = hip.y * h
+  const torsoPx = Math.abs(hip.y - sh.y) * h
+  const r = Math.max(42, torsoPx * 1.35)
+
+  ctx.save()
+  ctx.lineCap = 'round'
+
+  // The track: how close, as a faint full circle.
+  ctx.strokeStyle = `rgba(255,255,255,${0.1 + a.score * 0.18})`
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.arc(cx, cy, r, 0, Math.PI * 2)
+  ctx.stroke()
+
+  // The hold: an arc from twelve o'clock.
+  const progress = held?.progress ?? 0
+  if (progress > 0) {
+    ctx.strokeStyle = held.locked ? 'rgba(61,220,132,0.95)' : 'rgba(61,220,132,0.7)'
+    ctx.lineWidth = held.locked ? 7 : 5
+    ctx.beginPath()
+    ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress)
+    ctx.stroke()
+  }
+
+  if (held?.locked) {
+    ctx.strokeStyle = 'rgba(61,220,132,0.22)'
+    ctx.lineWidth = 16
+    ctx.beginPath()
+    ctx.arc(cx, cy, r, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+  ctx.restore()
 }
 
 function drawMark(ctx, w, h) {
@@ -819,6 +947,19 @@ function preroll(seconds = 5) {
   })
 }
 
+/*
+ * The shutter. Deliberately light — a hard white strobe in a dark corner at
+ * a gym is unpleasant and, for a small number of people, genuinely unsafe.
+ */
+function flash() {
+  const el = $('shutter')
+  if (!el) return
+  el.classList.remove('fire')
+  // Forcing a reflow restarts the animation when frames land back to back.
+  void el.offsetWidth
+  el.classList.add('fire')
+}
+
 // ── capture ────────────────────────────────────────────────────────────────
 
 let capture = null
@@ -850,6 +991,7 @@ async function runCapture() {
     video,
     pose: state.poseOverride ?? state.pose,
     steps,
+    onGrab: () => flash(),
     onStep: ({ step, index }) => {
       $('cap-title').textContent = step.title
       $('cap-cue').textContent = step.cue
