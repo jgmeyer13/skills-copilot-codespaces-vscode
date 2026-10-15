@@ -25,6 +25,7 @@ import { createMediaPipePose, createReplayPose } from './src/pose.js'
 import { createCapture } from './src/capture.js'
 import { newSession, closeSession, summarise, verdict, toCsv, resolutionTier } from './src/telemetry.js'
 import { L } from './src/scoring.js'
+import { silhouette } from './src/silhouettes.js'
 
 const $ = (id) => document.getElementById(id)
 const app = $('app')
@@ -100,6 +101,18 @@ setInterval(() => db.purge({ retentionDays: config.privacy.keptFrameRetentionDay
 renderLanguages()
 renderConsent()
 renderConsentLines()
+
+// The operator toggle survives a reload; a setting that resets itself every
+// morning is one nobody can trust in the exported data.
+state.operatorPresent = (await db.getMeta('operatorPresent')) ?? null
+$('operator-present').checked = !!state.operatorPresent
+/*
+ * A crash in a curtained corner is invisible: the member says nothing and
+ * walks out. Counting them is the only way anyone finds out.
+ */
+window.addEventListener('error', () => db.bump('crash').catch(() => {}))
+window.addEventListener('unhandledrejection', () => db.bump('crash').catch(() => {}))
+
 // ── the idle watchdog ──────────────────────────────────────────────────────
 /*
  * A member walks off. It happens — someone's set is called, a friend arrives,
@@ -275,9 +288,15 @@ $('start-pilot').addEventListener('click', async () => {
 
 // ── screens ────────────────────────────────────────────────────────────────
 
+const FUNNEL = ['checkin', 'consent', 'poseset', 'ready', 'capture', 'review', 'done']
+
 function show(screen) {
+  const changed = state.screen !== screen
   state.screen = screen
   app.dataset.screen = screen
+  // Counted once per arrival, so the operator can see where people stop
+  // rather than guessing from the sessions that happened to get recorded.
+  if (changed && FUNNEL.includes(screen)) db.bump(screen).catch(() => {})
   if (screen === 'dashboard') renderDashboard()
   // Declared below; show() is only ever called from an event, never during
   // module evaluation, so the hoisting works out.
@@ -542,7 +561,7 @@ $('consent-next').addEventListener('click', async () => {
   state.ghost = state.member?.lastSkeleton ?? null
   $('ready-hint').textContent = state.ghost
     ? 'The blue outline is where you stood last time. Line up with it.'
-    : 'Whole body in frame, feet on the ring.'
+    : 'Stand on the tape mark. Shirt on or off — your call.'
   renderPoseSets()
   show('poseset')
 })
@@ -636,6 +655,7 @@ async function startCamera(deviceId = state.camera.deviceId) {
         onStatus: (t) => { $('ready-badge-text').textContent = t },
       })
     } catch (err) {
+      db.bump('detectionFailure').catch(() => {})
       banner(`Pose model failed to load: ${err.message}`, 8000)
     }
   }
@@ -764,7 +784,40 @@ for (const n of [1, 2, 3].slice(0, config.capture.maxPeople)) {
   peoplePick.appendChild(b)
 }
 
-$('begin').addEventListener('click', () => runCapture())
+$('begin').addEventListener('click', async () => {
+  await preroll(config.capture.prerollSeconds ?? 5)
+  runCapture()
+})
+
+/*
+ * Five seconds between the button and the first pose.
+ *
+ * The member presses Start standing next to the laptop, then has to walk to
+ * the mark and decide about their shirt. Without this, all of that happens
+ * while the progress shot is already counting down — which is exactly the
+ * frame that must look the same on every visit.
+ *
+ * Silent, like everything else here. A laptop counting down out loud in a
+ * curtained corner tells the whole gym what is happening inside it.
+ */
+function preroll(seconds = 5) {
+  if (!seconds || seconds <= 0) return Promise.resolve()
+  return new Promise((resolve) => {
+    let left = seconds
+    $('preroll-count').textContent = String(left)
+    $('preroll').hidden = false
+    const tick = setInterval(() => {
+      left -= 1
+      if (left <= 0) {
+        clearInterval(tick)
+        $('preroll').hidden = true
+        return resolve()
+      }
+      $('preroll-count').textContent = String(left)
+    }, 1000)
+    preroll.cancel = () => { clearInterval(tick); $('preroll').hidden = true; resolve() }
+  })
+}
 
 // ── capture ────────────────────────────────────────────────────────────────
 
@@ -800,12 +853,16 @@ async function runCapture() {
     onStep: ({ step, index }) => {
       $('cap-title').textContent = step.title
       $('cap-cue').textContent = step.cue
+      $('cap-silo').innerHTML = silhouette(step.pose)
+      $('cap-bar').style.width = '0%'
       for (let i = 0; i < dots.children.length; i++) {
         dots.children[i].className = i < index ? 'done' : i === index ? 'now' : ''
       }
     },
     onTick: ({ into, step, people, best }) => {
       $('cap-count').textContent = Math.max(1, Math.ceil(step.seconds - into))
+      // A bar reads at a glance from the mark; a number has to be focused on.
+      $('cap-bar').style.width = `${Math.min(100, (into / step.seconds) * 100).toFixed(1)}%`
       const badge = $('cap-badge')
       const ok = people === state.people
       badge.classList.toggle('good', ok && best > 0.6)
@@ -1032,7 +1089,14 @@ $('share').addEventListener('click', async () => {
       a.download = file.name
       a.click()
     }
-  } catch { /* the member cancelled the share sheet */ }
+  } catch (err) {
+    // A cancelled share sheet is not a failure; anything else is, and the
+    // member is standing there with no photographs either way.
+    if (err && err.name !== 'AbortError') {
+      db.bump('transferFailure').catch(() => {})
+      banner('That did not send. Try again, or ask the operator.', 7000)
+    }
+  }
 })
 
 async function finishSession(outcome) {
@@ -1274,6 +1338,29 @@ async function renderDashboard() {
 
   $('dash-title').innerHTML = state.demo ? `Pilot dashboard ${tag}` : 'Pilot dashboard'
 
+  // ── the live funnel: counts only, never sealed ──────────────────────────
+  const c = await db.counters()
+  const started = c.checkin ?? 0
+  const tile = (label, value, sub) =>
+    `<div class="tile"><dt>${label}</dt><dd>${value}</dd>${sub ? `<small>${sub}</small>` : ''}</div>`
+  const dropFrom = (from, to) => {
+    const a = c[from] ?? 0
+    const b = c[to] ?? 0
+    return a ? `${a - b} left here (${Math.round(((a - b) / a) * 100)}%)` : 'nobody yet'
+  }
+  $('funnel').innerHTML = [
+    tile('Walked up', started, 'reached the number pad'),
+    tile('Consented', c.consent ?? 0, dropFrom('checkin', 'consent')),
+    tile('Chose poses', c.poseset ?? 0, dropFrom('consent', 'poseset')),
+    tile('Stood on the mark', c.ready ?? 0, dropFrom('poseset', 'ready')),
+    tile('Recorded', c.capture ?? 0, dropFrom('ready', 'capture')),
+    tile('Chose photos', c.review ?? 0, dropFrom('capture', 'review')),
+    tile('Finished', c.done ?? 0, dropFrom('review', 'done')),
+    tile('Detection failures', c.detectionFailure ?? 0, 'model never saw anybody'),
+    tile('Transfer failures', c.transferFailure ?? 0, 'photos did not reach a phone'),
+    tile('Crashes', c.crash ?? 0, 'unhandled errors'),
+  ].join('')
+
   // ── sealed until the pilot is over ──────────────────────────────────────
   const sealed = $('sealed')
   if (v.sealed) {
@@ -1294,7 +1381,15 @@ async function renderDashboard() {
           <span><b>${s.sessions} of ${config.decisionRules.minimumSessions} sessions</b><i>${v.sessionsLeft} to go</i></span>
           <div class="track"><i style="width:${Math.round(sessionsDone * 100)}%"></i></div>
         </div>
-      </div>`
+      </div>
+      ${
+        v.unsealByDay
+          ? `<p style="margin:12px 0 0" class="tiny"><strong>It opens either way on day ${v.unsealByDay}</strong>
+             — ${v.daysLeft === null ? '' : `${Math.ceil(v.daysLeft)} day(s) from now, `}whatever the session count.
+             Both conditions are an AND, and a pilot that runs its weeks but falls short on sessions
+             would otherwise stay shut for ever and never be read at all.</p>`
+          : ''
+      }`
     $('verdict').hidden = true
     $('rules').hidden = true
   } else {
@@ -1302,6 +1397,13 @@ async function renderDashboard() {
     $('verdict').hidden = false
     $('rules').hidden = false
     $('verdict').innerHTML = `
+      ${
+        v.openedEarly
+          ? `<p class="early">Opened on the day-${v.unsealByDay} backstop, not by the end conditions —
+             ${v.weeksLeft > 0 ? `${v.weeksLeft.toFixed(1)} week(s) short` : ''}${v.weeksLeft > 0 && v.sessionsLeft > 0 ? ' and ' : ''}${v.sessionsLeft > 0 ? `${v.sessionsLeft} session(s) short` : ''}.
+             Read it as a thin sample and say so to anyone you show it to.</p>`
+          : ''
+      }
       <h3>${v.overall === 'go' ? 'Both thresholds met' : v.overall === 'no' ? 'A threshold was clearly missed' : 'Mixed — neither clearly met'}</h3>
       <p style="margin:0 0 8px">${
         v.character === 'unclear'
@@ -1374,6 +1476,11 @@ async function renderDashboard() {
     .join('')
 }
 
+$('operator-present').addEventListener('change', async (e) => {
+  state.operatorPresent = e.target.checked
+  await db.setMeta('operatorPresent', state.operatorPresent)
+})
+
 $('export-csv').addEventListener('click', async () => {
   const all = await db.listSessions()
   const csv = toCsv(all)
@@ -1398,6 +1505,7 @@ window.__pilot = {
   useLive() { state.poseOverride = null },
   async seedSessions(rows) { for (const row of rows) await db.saveSession(row) },
   async startRealPilot() { const r = await db.startRealPilot(); await refreshPilotState(); return r },
+  counters: () => db.counters(),
   async pilotState() { return db.pilotState() },
   async wipe() { await db.wipeEverything(); await refreshPilotState() },
   /** What the review screen is showing, in display order, with hidden kinds. */

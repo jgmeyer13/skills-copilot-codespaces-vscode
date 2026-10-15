@@ -71,6 +71,8 @@
     "_comment": "The 30 seconds, as a script. Two sets, chosen by the member before recording. The progress shot is deliberately IDENTICAL in both — it is the frame that has to line up with the same person's next visit, so it cannot depend on which set they picked that day.",
     "totalSeconds": 30,
     "maxPeople": 3,
+    "_prerollSeconds": "The pause between pressing Start and the first pose, for walking to the mark and deciding about a shirt. Without it that happens during the progress shot, which is the one frame that has to look the same every visit.",
+    "prerollSeconds": 5,
 
     "_progressShot": "Shown to the member as 'Progress shot — same spot, same light, every time.' It is labelled now. An earlier version hid which frame this was, on the reasoning that an interface explaining the measurement to its subject destroys it. That was overruled deliberately: see DECISIONS.md, which records what the keep-rate thresholds now mean as a result.",
 
@@ -109,6 +111,8 @@
 
   "decisionRules": {
     "_comment": "Pre-registered before the pilot starts. The dashboard shows RAW NUMBERS ONLY until both end conditions are met, and only then scores them. See DECISIONS.md.",
+    "_unsealByDay": "A backstop. The two end conditions are an AND, so a pilot that runs its four weeks but falls short on sessions would stay sealed for ever and never be read at all. That is worse than reading a thin sample, because a thin sample can be reported as thin. On day 35 the dashboard opens whatever the count, and says it opened early.",
+    "unsealByDay": 35,
     "minimumWeeks": 4,
     "minimumSessions": 120,
 

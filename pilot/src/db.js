@@ -281,6 +281,9 @@ export async function wipeDemo() {
  */
 export async function startRealPilot() {
   const wiped = await wipeDemo()
+  // The funnel counted every rehearsal too. Starting the real pilot has to
+  // zero them, or week one opens with a drop-off chart built from testing.
+  await resetCounters()
   const left = (await all('sessions')).filter((s) => s.demo).length
   if (left) throw new Error(`${left} demo session(s) survived the wipe — not starting`)
   const at = Date.now()
@@ -289,6 +292,36 @@ export async function startRealPilot() {
 }
 
 // ── meta ───────────────────────────────────────────────────────────────────
+
+/*
+ * Plain counters, kept in meta.
+ *
+ * Drop-off cannot be reconstructed from the session log, because a session row
+ * is only written once capture starts — everybody who walked away at the
+ * consent screen left no trace at all. These count the screens actually
+ * reached, so the operator can see where people stop instead of guessing.
+ *
+ * They are counts and nothing else: no identifiers, no times, nothing that
+ * ties a number back to a person.
+ */
+export async function bump(key, by = 1) {
+  const row = await get('meta', `count:${key}`)
+  const value = (row?.value ?? 0) + by
+  await put('meta', { key: `count:${key}`, value })
+  return value
+}
+
+export async function counters() {
+  const rows = await all('meta')
+  const out = {}
+  for (const r of rows) if (String(r.key).startsWith('count:')) out[String(r.key).slice(6)] = r.value
+  return out
+}
+
+export async function resetCounters() {
+  const rows = await all('meta')
+  await Promise.all(rows.filter((r) => String(r.key).startsWith('count:')).map((r) => del('meta', r.key)))
+}
 
 export const getMeta = (key) => get('meta', key).then((r) => (r ? r.value : null))
 export const setMeta = (key, value) => put('meta', { key, value })
