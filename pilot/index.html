@@ -206,7 +206,21 @@ p  { margin: 0 0 12px; color: var(--text-2); line-height: 1.6; font-size: clamp(
 
 /* ── review ──────────────────────────────────────────────────────────────── */
 
-.frames { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; overflow-y: auto; }
+/*
+ * The cards carry two toggles each now, which made them tall enough to
+ * overflow this area and slide underneath the buttons below — the last card's
+ * controls became unclickable, sitting behind "Send now".
+ *
+ * So the wrapper is the thing with the bounded height and the scroll, and the
+ * grid is free to be as tall as it likes inside it. A flex child will not
+ * shrink below its content without min-height: 0, which is what let the grid
+ * push past its parent in the first place.
+ */
+.frames-wrap { display: flex; min-height: 0; overflow-y: auto; }
+.frames {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px; align-content: start; width: 100%;
+}
 .frame-card { background: var(--surface); border: 2px solid var(--hair); border-radius: var(--r); overflow: hidden; display: flex; flex-direction: column; }
 .frame-card.chosen { border-color: var(--go); }
 .frame-card img { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; background: #000; }
@@ -617,7 +631,7 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
       <p id="review-sub">Tap the ones you want. Nothing is saved until you choose.</p>
       <p id="review-code" hidden style="margin:0">Your code: <b class="code-out" id="review-code-value"></b><br/><span class="tiny">Save it — it is the only way to see these next to your next visit.</span></p>
     </div>
-    <div class="pad grow" style="padding-top:0"><div class="frames" id="frames"></div></div>
+    <div class="pad grow frames-wrap" style="padding-top:0"><div class="frames" id="frames"></div></div>
     <div class="pad row">
       <button class="btn grow" id="share">Send now</button>
       <button class="btn btn-go grow" id="review-done">Done</button>
