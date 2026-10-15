@@ -1,0 +1,519 @@
+//@version=5
+// =============================================================================
+//  STAGE 1 — "SWEEP + FVG RECLAIM" BACKTEST   (for NAS100 / US500, 1H chart)
+// =============================================================================
+//
+//  WHAT THIS IS
+//  ------------
+//  A Pine STRATEGY (not an indicator) so TradingView's Strategy Tester can
+//  produce real historical stats for your setup. It does two things at once:
+//
+//    1. The Strategy Tester tab trades ONE exit model (you pick it in the
+//       inputs) so you can inspect its native equity curve and trade list.
+//
+//    2. A comparison table (top-right of the chart) tracks ALL THREE exit
+//       models on the IDENTICAL list of entries, with every stat measured
+//       in R (multiples of the initial risk per trade):
+//         A = fixed target at the nearest prior 1H swing high/low
+//         B = fixed 2R target
+//         C = structure trail (stop ratchets behind each new confirmed swing)
+//
+//  HOW TO RUN IT
+//  -------------
+//    1. Open a NAS100 (or US500) chart, set the timeframe to 1H.
+//       (The script warns you if the chart isn't 1H — the whole spec assumes
+//       1H execution candles with a 4H bias pulled in the background.)
+//    2. Pine Editor -> paste this file -> "Add to chart".
+//    3. Read the comparison table on the chart + the Strategy Tester tab.
+//    4. For honest results, set realistic commission/slippage in the
+//       strategy's Properties tab for your broker.
+//
+//  NO PREDICTIONS. This script reports historical trade outcomes only.
+//  It never outputs a probability, forecast, or signal strength.
+//
+//  SAME-BAR AMBIGUITY (honesty note)
+//  ---------------------------------
+//  On 1H bars you cannot know whether the stop or the target traded first
+//  when one bar touches both. This script counts those bars as LOSSES —
+//  deliberately conservative. We'd rather understate the edge than invent one.
+//
+// =============================================================================
+
+strategy("Stage 1 — Sweep + FVG Reclaim Backtest",
+     shorttitle              = "S1 Sweep+FVG BT",
+     overlay                 = true,
+     initial_capital         = 100000,
+     currency                = currency.USD,
+     pyramiding              = 0,      // one position at a time, always
+     calc_on_order_fills     = false,
+     process_orders_on_close = false,  // orders only become live on the NEXT bar — no same-bar cheating
+     commission_type         = strategy.commission.percent,
+     commission_value        = 0.0,    // set your real costs in the Properties tab
+     max_boxes_count         = 500,
+     max_lines_count         = 500,
+     max_labels_count        = 500)
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  1) TUNABLE INPUTS — everything you may want to adjust lives here.
+//     Nothing below this section needs touching to re-tune the system.
+// ─────────────────────────────────────────────────────────────────────────────
+grpS = "1 · Structure"
+swingLen = input.int(2, "1H swing lookback (bars each side)", minval = 1, group = grpS,
+     tooltip = "A swing low = a low with this many higher lows on BOTH sides (your spec: 2). Mirrored for swing highs. Note: a swing can only be confirmed this many bars after the extreme — that lag is real and unavoidable, not a bug.")
+biasLen = input.int(2, "4H pivot lookback (bars each side)", minval = 1, group = grpS,
+     tooltip = "Pivots used to judge the 4H trend. Bias is LONG only when the last two confirmed 4H pivot highs AND pivot lows are both rising (mirrored for shorts). Anything else = no trade.")
+
+grpD = "2 · Displacement + FVG"
+dispMult = input.float(1.5, "Displacement body ≥ × average body", step = 0.1, minval = 0.5, group = grpD,
+     tooltip = "The displacement candle's body must be at least this multiple of the average body.")
+dispAvgLen = input.int(10, "Average body measured over (bars)", minval = 2, group = grpD)
+dispWindow = input.int(3, "Displacement must occur within (bars after sweep)", minval = 1, group = grpD)
+
+grpT = "3 · Trade management"
+minRR = input.float(2.0, "Minimum R:R to the swing-high target", step = 0.1, group = grpT,
+     tooltip = "Measured against exit model A's target, and applied to ALL models — so all three exit models trade the identical setup list. Your spec: skip if R:R < 1:2.")
+expiryBars = input.int(20, "Cancel unfilled limit after (bars)", minval = 1, group = grpT)
+stopBufTicks = input.int(2, "Stop buffer beyond the sweep wick (ticks)", minval = 0, group = grpT,
+     tooltip = "'Just below the sweep wick' — this is how far below (in ticks).")
+riskPct = input.float(1.0, "Risk per trade (% of equity)", step = 0.25, minval = 0.1, group = grpT,
+     tooltip = "Position size is computed from the stop distance so each trade risks this % of current equity. Makes currency stats read cleanly in R.")
+
+grpE = "4 · Exit model traded in the Strategy Tester tab"
+exitModel = input.string("A: swing-high target", "Exit model", group = grpE,
+     options = ["A: swing-high target", "B: fixed 2R target", "C: structure trail"],
+     tooltip = "The comparison table ALWAYS shows all three models. This only picks which one the Strategy Tester actually trades, so you can inspect its equity curve and trade-by-trade list.")
+
+grpX = "5 · Session filter"
+useSession = input.bool(false, "Only take setups inside the session", group = grpX,
+     tooltip = "OFF by default so the first run shows the full, unfiltered sample. Turn on to restrict new setups to the window below. Open trades are still managed around the clock.")
+sessWindow = input.session("0930-1600", "Session window (New York time)", group = grpX)
+
+grpV = "6 · Visuals"
+showViz = input.bool(true, "Draw setup markers (FVG box, entry/stop/target)", group = grpV)
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  2) BASIC SERIES used throughout
+// ─────────────────────────────────────────────────────────────────────────────
+bodySize = math.abs(close - open)          // candle body, in points
+avgBody  = ta.sma(bodySize, dispAvgLen)    // rolling average body
+tickBuf  = stopBufTicks * syminfo.mintick  // stop buffer converted to price
+
+// True when this bar is inside the chosen session (or the filter is off)
+inSession = not useSession or not na(time(timeframe.period, sessWindow, "America/New_York"))
+
+// The spec assumes 1H execution candles — warn loudly on any other timeframe
+onWrongTF = timeframe.period != "60"
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  3) 4H BIAS — higher highs + higher lows = long bias (mirrored for shorts)
+//
+//  REPAINT / LOOK-AHEAD NOTES (this matters more than a pretty curve):
+//   • request.security() can leak future data. We block it with the standard
+//     non-repainting pattern: request the series offset by one 4H bar ([1])
+//     with lookahead ON. Every 1H bar then sees only the LAST FULLY CLOSED
+//     4H bar — nothing from a still-forming 4H bar is ever used, and the
+//     value never changes after the fact.
+//   • Pivots confirm only biasLen bars AFTER the extreme, so the bias lags by
+//     design. It cannot "know" a high was a swing high before enough bars
+//     printed to prove it. That lag is the honest cost of the definition.
+// ─────────────────────────────────────────────────────────────────────────────
+f_bias4h() =>
+    ph = ta.pivothigh(high, biasLen, biasLen)
+    pl = ta.pivotlow(low, biasLen, biasLen)
+    var float phNew = na   // most recent confirmed 4H pivot high
+    var float phOld = na   // the one before it
+    var float plNew = na   // most recent confirmed 4H pivot low
+    var float plOld = na
+    if not na(ph)
+        phOld := phNew
+        phNew := ph
+    if not na(pl)
+        plOld := plNew
+        plNew := pl
+    bull = not na(phOld) and not na(plOld) and phNew > phOld and plNew > plOld
+    bear = not na(phOld) and not na(plOld) and phNew < phOld and plNew < plOld
+    [bull[1], bear[1]]   // [1] = last CLOSED 4H bar only (see note above)
+
+[bias4hBull, bias4hBear] = request.security(syminfo.tickerid, "240", f_bias4h(),
+     lookahead = barmerge.lookahead_on)
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  4) 1H SWING LOWS / HIGHS ("liquidity pools")
+//
+//  Confirmed, still-untouched swings live in two arrays. Each bar we check
+//  every stored level:
+//    • wick through it + close back on the right side = SWEPT  -> setup fuel,
+//      remove the level (its liquidity is taken)
+//    • full close through it = BROKEN -> per your spec, NOT a sweep; the
+//      level is dead, remove it, no setup
+// ─────────────────────────────────────────────────────────────────────────────
+var swingLows  = array.new_float()
+var swingHighs = array.new_float()
+
+newPL = ta.pivotlow(low, swingLen, swingLen)     // confirms swingLen bars late — by definition
+newPH = ta.pivothigh(high, swingLen, swingLen)
+
+if not na(newPL)
+    array.push(swingLows, newPL)
+    if array.size(swingLows) > 50                // keep memory bounded
+        array.shift(swingLows)
+if not na(newPH)
+    array.push(swingHighs, newPH)
+    if array.size(swingHighs) > 50
+        array.shift(swingHighs)
+
+// Sweep detection + level housekeeping (runs on every confirmed bar)
+sweptLow  = false
+sweptHigh = false
+if array.size(swingLows) > 0
+    for i = array.size(swingLows) - 1 to 0       // walk backwards so removals are safe
+        lvl = array.get(swingLows, i)
+        if close < lvl                           // full close below = broken, not a sweep
+            array.remove(swingLows, i)
+        else if low < lvl and close > lvl        // wick below + reclaim = SWEEP
+            sweptLow := true
+            array.remove(swingLows, i)
+if array.size(swingHighs) > 0
+    for i = array.size(swingHighs) - 1 to 0
+        lvl = array.get(swingHighs, i)
+        if close > lvl                           // full close above = broken
+            array.remove(swingHighs, i)
+        else if high > lvl and close < lvl       // wick above + reject = SWEEP
+            sweptHigh := true
+            array.remove(swingHighs, i)
+
+// Nearest untouched swing high strictly ABOVE a price (long target A). na if none.
+f_nearestHighAbove(px) =>
+    float best = na
+    if array.size(swingHighs) > 0
+        for i = 0 to array.size(swingHighs) - 1
+            lvl = array.get(swingHighs, i)
+            if lvl > px and (na(best) or lvl < best)
+                best := lvl
+    best
+
+// Nearest untouched swing low strictly BELOW a price (short target A). na if none.
+f_nearestLowBelow(px) =>
+    float best = na
+    if array.size(swingLows) > 0
+        for i = 0 to array.size(swingLows) - 1
+            lvl = array.get(swingLows, i)
+            if lvl < px and (na(best) or lvl > best)
+                best := lvl
+    best
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  5) STATS BOOKKEEPING — one slot per exit model: 0 = A, 1 = B, 2 = C.
+//     Every closed virtual trade calls f_record(model, R) exactly once.
+// ─────────────────────────────────────────────────────────────────────────────
+var nTr  = array.new_int(3, 0)      // total trades
+var nWin = array.new_int(3, 0)      // winners (R > 0)
+var sumR = array.new_float(3, 0.0)  // net R (expectancy = sumR / nTr)
+var gWin = array.new_float(3, 0.0)  // gross winning R
+var gLos = array.new_float(3, 0.0)  // gross losing R (stored positive)
+var eqR  = array.new_float(3, 0.0)  // running R equity curve
+var pkR  = array.new_float(3, 0.0)  // peak of that curve
+var ddR  = array.new_float(3, 0.0)  // max drawdown of that curve, in R
+var curL = array.new_int(3, 0)      // current losing streak
+var maxL = array.new_int(3, 0)      // longest losing streak
+
+f_record(i, r) =>
+    array.set(nTr, i, array.get(nTr, i) + 1)
+    array.set(sumR, i, array.get(sumR, i) + r)
+    if r > 0
+        array.set(nWin, i, array.get(nWin, i) + 1)
+        array.set(gWin, i, array.get(gWin, i) + r)
+        array.set(curL, i, 0)
+    else
+        array.set(gLos, i, array.get(gLos, i) - r)
+        array.set(curL, i, array.get(curL, i) + 1)
+        array.set(maxL, i, math.max(array.get(maxL, i), array.get(curL, i)))
+    e = array.get(eqR, i) + r
+    array.set(eqR, i, e)
+    p = math.max(array.get(pkR, i), e)
+    array.set(pkR, i, p)
+    array.set(ddR, i, math.max(array.get(ddR, i), p - e))
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  6) SETUP STATE MACHINE
+//     idle ->(sweep with 4H trend)-> waiting for displacement + FVG
+//          ->(FVG confirmed, R:R ok)-> limit order pending -> filled/cancelled
+// ─────────────────────────────────────────────────────────────────────────────
+var int   state     = 0     // 0 = idle · 1 = waiting for displacement · 2 = order pending
+var int   dir       = 0     // +1 long, −1 short
+var int   sweepBar  = na
+var float sweepWick = na    // extreme of the sweep candle (stop anchor)
+var int   orderBar  = na
+var float entryPx   = na    // limit price = 50% of the FVG
+var float stopPx    = na
+var float tgtA      = na    // model A: nearest untouched prior swing
+var float tgtB      = na    // model B: fixed 2R
+
+// Virtual "legs": the SAME fill is tracked three times, once per exit model,
+// so the comparison table compares exits on an identical trade list.
+var bool  legA    = false
+var bool  legB    = false
+var bool  legC    = false
+var float vEntry  = na
+var float vStop   = na
+var float vRisk   = na
+var int   vDir    = 0
+var int   fillBar = na
+var float trailC  = na      // model C structure-trail stop (shared with the real strategy exit)
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  7) PENDING LIMIT ORDER — fill, invalidate, or expire.
+//     A limit placed at the close of bar N can only fill from bar N+1 onward
+//     (the same rule the Strategy Tester uses) — no same-bar cheating.
+// ─────────────────────────────────────────────────────────────────────────────
+justFilled = false
+if state == 2 and bar_index > orderBar
+    touched = dir == 1 ? low <= entryPx : high >= entryPx
+    if touched
+        // If the bar OPENED beyond our limit, the fill is at the open (a better price)
+        fillPx = dir == 1 ? math.min(open, entryPx) : math.max(open, entryPx)
+        vEntry  := fillPx
+        vStop   := stopPx
+        vRisk   := math.abs(fillPx - stopPx)
+        vDir    := dir
+        fillBar := bar_index
+        trailC  := stopPx
+        legA := true
+        legB := true
+        legC := true
+        justFilled := true
+        state := 0
+    else
+        // 2a) full close through the sweep wick = the setup idea is dead
+        dead    = dir == 1 ? close < stopPx : close > stopPx
+        // 2b) price never came back within the allowed window
+        expired = bar_index - orderBar >= expiryBars
+        if dead or expired
+            strategy.cancel(dir == 1 ? "Long" : "Short")
+            state := 0
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  8) VIRTUAL LEG MANAGEMENT — the three exit models, all measured in R.
+//     Exits are gap-aware: if a bar opens beyond a stop/target, we book the
+//     open price, not the level (an honest fill, like the real tester).
+// ─────────────────────────────────────────────────────────────────────────────
+if legA or legB or legC
+    // Model A — fixed target at the nearest prior swing.
+    if legA
+        hitS = vDir == 1 ? low <= vStop : high >= vStop
+        hitT = vDir == 1 ? high >= tgtA : low <= tgtA
+        if hitS   // stop first; a both-touched bar counts as a LOSS (conservative)
+            xPx = vDir == 1 ? math.min(open, vStop) : math.max(open, vStop)
+            f_record(0, vDir * (xPx - vEntry) / vRisk)
+            legA := false
+        else if hitT
+            xPx = vDir == 1 ? math.max(open, tgtA) : math.min(open, tgtA)
+            f_record(0, vDir * (xPx - vEntry) / vRisk)
+            legA := false
+
+    // Model B — fixed 2R target. Same entry, same stop, different target.
+    if legB
+        hitS = vDir == 1 ? low <= vStop : high >= vStop
+        hitT = vDir == 1 ? high >= tgtB : low <= tgtB
+        if hitS
+            xPx = vDir == 1 ? math.min(open, vStop) : math.max(open, vStop)
+            f_record(1, vDir * (xPx - vEntry) / vRisk)
+            legB := false
+        else if hitT
+            xPx = vDir == 1 ? math.max(open, tgtB) : math.min(open, tgtB)
+            f_record(1, vDir * (xPx - vEntry) / vRisk)
+            legB := false
+
+    // Model C — no target; exits only when the trailed stop is hit.
+    // IMPORTANT ORDER: we test THIS bar against the trail as it stood at the
+    // START of the bar, and only ratchet the trail AFTER — a swing that
+    // confirms at this bar's close wasn't knowable during the bar, so using
+    // it against this bar's own low would be intra-bar look-ahead.
+    if legC
+        hitS = vDir == 1 ? low <= trailC : high >= trailC
+        if hitS
+            xPx = vDir == 1 ? math.min(open, trailC) : math.max(open, trailC)
+            f_record(2, vDir * (xPx - vEntry) / vRisk)
+            legC := false
+
+    // Trail ratchet (runs after the exit check — see note above). Each NEWLY
+    // CONFIRMED swing in our favour tightens the stop; it never loosens. The
+    // pivot's actual bar must sit after our fill — pivots confirmed now
+    // happened swingLen bars ago, so we check that explicitly.
+    if legC
+        if vDir == 1 and not na(newPL) and bar_index - swingLen >= fillBar
+            trailC := math.max(trailC, newPL - tickBuf)
+        if vDir == -1 and not na(newPH) and bar_index - swingLen >= fillBar
+            trailC := math.min(trailC, newPH + tickBuf)
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  9) NEW SETUPS — only started when completely flat: all three virtual legs
+//     closed AND the real position closed. This keeps the trade list identical
+//     across models (model C usually holds longest, so it sets the pace).
+// ─────────────────────────────────────────────────────────────────────────────
+allFlat = not legA and not legB and not legC and strategy.position_size == 0
+
+// 9a) A sweep in the direction of the 4H trend starts the displacement clock
+if state == 0 and allFlat and not justFilled and inSession
+    if bias4hBull and sweptLow
+        state := 1
+        dir := 1
+        sweepBar := bar_index
+        sweepWick := low
+    else if bias4hBear and sweptHigh
+        state := 1
+        dir := -1
+        sweepBar := bar_index
+        sweepWick := high
+else if state == 1 and inSession
+    // While waiting, a fresh sweep in the same direction restarts the clock
+    if dir == 1 and sweptLow
+        sweepBar := bar_index
+        sweepWick := low
+    else if dir == -1 and sweptHigh
+        sweepBar := bar_index
+        sweepWick := high
+
+// 9b) If the 4H bias flips while we wait, the setup idea is dead
+if state == 1
+    if (dir == 1 and not bias4hBull) or (dir == -1 and not bias4hBear)
+        state := 0
+
+// 9c) Displacement + FVG check. An FVG is a 3-candle pattern, so it can only
+//     be CONFIRMED on candle 3 (the current bar); the displacement candle is
+//     the middle one (1 bar ago). No look-ahead: we act at candle 3's close.
+if state == 1
+    dispInWindow = bar_index - 1 > sweepBar and bar_index - 1 <= sweepBar + dispWindow
+    bigBody      = not na(avgBody[2]) and bodySize[1] >= dispMult * avgBody[2]
+
+    if dir == 1
+        dispOK = dispInWindow and close[1] > open[1] and bigBody   // strong bullish close
+        fvgOK  = low > high[2]                                     // bullish FVG: candle-1 high < candle-3 low
+        if dispOK and fvgOK
+            fvgTop = low
+            fvgBot = high[2]
+            ePx = (fvgTop + fvgBot) / 2          // limit at the 50% midpoint of the FVG
+            sPx = sweepWick - tickBuf            // just below the sweep wick
+            tA  = f_nearestHighAbove(ePx)        // nearest untouched prior 1H swing high
+            rsk = ePx - sPx
+            if not na(tA) and rsk > 0 and (tA - ePx) / rsk >= minRR
+                entryPx := ePx
+                stopPx  := sPx
+                tgtA    := tA
+                tgtB    := ePx + 2 * rsk
+                orderBar := bar_index
+                state := 2
+                qty = strategy.equity * riskPct / 100 / (rsk * syminfo.pointvalue)
+                strategy.entry("Long", strategy.long, qty = qty, limit = ePx)
+                if showViz
+                    box.new(bar_index - 2, fvgTop, bar_index + expiryBars, fvgBot,
+                         border_color = color.new(color.teal, 40), bgcolor = color.new(color.teal, 88))
+                    line.new(bar_index, sPx, bar_index + expiryBars, sPx, color = color.new(color.red, 30))
+                    line.new(bar_index, tA, bar_index + expiryBars, tA, color = color.new(color.green, 30))
+                    label.new(bar_index, fvgBot, "long setup: sweep + displacement + FVG",
+                         style = label.style_label_up, color = color.new(color.teal, 70), textcolor = color.white, size = size.small)
+            else
+                state := 0   // FVG appeared but no valid target / R:R < minimum -> per spec, skip
+
+    else if dir == -1
+        dispOK = dispInWindow and close[1] < open[1] and bigBody   // strong bearish close
+        fvgOK  = high < low[2]                                     // bearish FVG: candle-1 low > candle-3 high
+        if dispOK and fvgOK
+            fvgTop = low[2]
+            fvgBot = high
+            ePx = (fvgTop + fvgBot) / 2
+            sPx = sweepWick + tickBuf            // just above the sweep wick
+            tA  = f_nearestLowBelow(ePx)         // nearest untouched prior 1H swing low
+            rsk = sPx - ePx
+            if not na(tA) and rsk > 0 and (ePx - tA) / rsk >= minRR
+                entryPx := ePx
+                stopPx  := sPx
+                tgtA    := tA
+                tgtB    := ePx - 2 * rsk
+                orderBar := bar_index
+                state := 2
+                qty = strategy.equity * riskPct / 100 / (rsk * syminfo.pointvalue)
+                strategy.entry("Short", strategy.short, qty = qty, limit = ePx)
+                if showViz
+                    box.new(bar_index - 2, fvgTop, bar_index + expiryBars, fvgBot,
+                         border_color = color.new(color.maroon, 40), bgcolor = color.new(color.maroon, 88))
+                    line.new(bar_index, sPx, bar_index + expiryBars, sPx, color = color.new(color.red, 30))
+                    line.new(bar_index, tA, bar_index + expiryBars, tA, color = color.new(color.green, 30))
+                    label.new(bar_index, fvgTop, "short setup: sweep + displacement + FVG",
+                         style = label.style_label_down, color = color.new(color.maroon, 70), textcolor = color.white, size = size.small)
+            else
+                state := 0
+
+    // Ran out of time for a displacement (window + 1 bar for FVG confirmation)
+    if state == 1 and bar_index > sweepBar + dispWindow + 1
+        state := 0
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 10) REAL POSITION EXITS — for the model selected in the inputs, so the
+//     Strategy Tester tab reflects that model's trades. A/B use fixed
+//     stop+target; C re-submits its exit every bar with the ratcheted stop.
+// ─────────────────────────────────────────────────────────────────────────────
+isC = exitModel == "C: structure trail"
+isB = exitModel == "B: fixed 2R target"
+if strategy.position_size > 0
+    strategy.exit("X-Long", "Long", stop = isC ? trailC : stopPx, limit = isC ? na : isB ? tgtB : tgtA)
+if strategy.position_size < 0
+    strategy.exit("X-Short", "Short", stop = isC ? trailC : stopPx, limit = isC ? na : isB ? tgtB : tgtA)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 11) COMPARISON TABLE — all three exit models side by side, everything in R.
+//     "Expectancy (R)" = net R / number of trades = the average R per trade.
+//     A small-sample warning appears under any column with fewer than 30
+//     trades: treat those numbers as noise, not evidence.
+// ─────────────────────────────────────────────────────────────────────────────
+f_fmt(x) => na(x) ? "—" : str.tostring(x, "0.00")
+
+var table tb = table.new(position.top_right, 4, 12, border_width = 1,
+     border_color = color.new(color.gray, 60), bgcolor = color.new(color.black, 20))
+
+if barstate.islast
+    hdrBg = color.new(color.blue, 60)
+    txtC  = color.white
+    // header row
+    table.cell(tb, 0, 0, "Exit model", bgcolor = hdrBg, text_color = txtC, text_size = size.small)
+    table.cell(tb, 1, 0, "A · swing target", bgcolor = hdrBg, text_color = txtC, text_size = size.small)
+    table.cell(tb, 2, 0, "B · fixed 2R", bgcolor = hdrBg, text_color = txtC, text_size = size.small)
+    table.cell(tb, 3, 0, "C · structure trail", bgcolor = hdrBg, text_color = txtC, text_size = size.small)
+
+    rowNames = array.from("Trades", "Win rate %", "Avg win (R)", "Avg loss (R)",
+         "Expectancy (R/trade)", "Profit factor", "Net R", "Max drawdown (R)", "Longest losing streak", "Sample check")
+    for r = 0 to array.size(rowNames) - 1
+        table.cell(tb, 0, r + 1, array.get(rowNames, r), text_color = txtC, text_size = size.small,
+             text_halign = text.align_left)
+
+    for i = 0 to 2
+        n    = array.get(nTr, i)
+        w    = array.get(nWin, i)
+        lcnt = n - w
+        wr   = n > 0 ? 100.0 * w / n : na
+        aw   = w > 0 ? array.get(gWin, i) / w : na
+        al   = lcnt > 0 ? -array.get(gLos, i) / lcnt : na
+        ex   = n > 0 ? array.get(sumR, i) / n : na
+        pf   = array.get(gLos, i) > 0 ? array.get(gWin, i) / array.get(gLos, i) : na
+        col  = i + 1
+        table.cell(tb, col, 1, str.tostring(n), text_color = txtC, text_size = size.small)
+        table.cell(tb, col, 2, f_fmt(wr), text_color = txtC, text_size = size.small)
+        table.cell(tb, col, 3, f_fmt(aw), text_color = txtC, text_size = size.small)
+        table.cell(tb, col, 4, f_fmt(al), text_color = txtC, text_size = size.small)
+        table.cell(tb, col, 5, f_fmt(ex), text_color = ex > 0 ? color.lime : color.orange, text_size = size.small)
+        table.cell(tb, col, 6, f_fmt(pf), text_color = txtC, text_size = size.small)
+        table.cell(tb, col, 7, f_fmt(array.get(sumR, i)), text_color = txtC, text_size = size.small)
+        table.cell(tb, col, 8, f_fmt(array.get(ddR, i)), text_color = txtC, text_size = size.small)
+        table.cell(tb, col, 9, str.tostring(array.get(maxL, i)), text_color = txtC, text_size = size.small)
+        table.cell(tb, col, 10, n < 30 ? "⚠ small sample" : "ok (n ≥ 30)",
+             text_color = n < 30 ? color.orange : color.new(color.green, 20), text_size = size.small)
+
+    // loud warning if the chart timeframe isn't the 1H the spec assumes
+    table.cell(tb, 0, 11, onWrongTF ? "⚠ CHART IS NOT 1H — results are NOT valid for this spec" : "chart TF: 1H ✓",
+         text_color = onWrongTF ? color.red : color.new(color.green, 20), text_size = size.small,
+         text_halign = text.align_left)
+    // merge only once — re-merging an already-merged range errors at runtime
+    var bool tbMerged = false
+    if not tbMerged
+        table.merge_cells(tb, 0, 11, 3, 11)
+        tbMerged := true
