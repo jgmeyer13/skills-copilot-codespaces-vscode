@@ -19,7 +19,7 @@
  *   early and good later for reasons unrelated to the product.
  */
 
-export function newSession({ memberKey, isReturning, people, queueAtStart, keepsHistory, demo, camera }) {
+export function newSession({ memberKey, isReturning, people, queueAtStart, keepsHistory, demo, camera, poseSet, operatorPresent }) {
   return {
     id: `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
     startedAt: Date.now(),
@@ -30,6 +30,12 @@ export function newSession({ memberKey, isReturning, people, queueAtStart, keeps
     people,
     squad: people > 1,
     queueAtStart: queueAtStart ?? 0,
+    poseSet: poseSet ?? null,
+    // Asked once at the end, after they have seen what they get.
+    returnIntent: null,
+    // Whether the operator was standing there. A pilot run with someone
+    // explaining it is measuring a different product from one run alone.
+    operatorPresent: operatorPresent ?? null,
     keepsHistory: !!keepsHistory,
     retakes: 0,
     outcome: 'abandoned',
@@ -49,13 +55,18 @@ export function newSession({ memberKey, isReturning, people, queueAtStart, keeps
 
 export function closeSession(session, { frames, outcome, meanConfidence }) {
   const kept = { measurement: 0, post: 0, candid: 0 }
-  for (const f of frames) if (f.kept) kept[f.kind] = (kept[f.kind] ?? 0) + 1
+  const sent = { measurement: 0, post: 0, candid: 0 }
+  for (const f of frames) {
+    if (f.kept) kept[f.kind] = (kept[f.kind] ?? 0) + 1
+    if (f.sent) sent[f.kind] = (sent[f.kind] ?? 0) + 1
+  }
   const scores = frames.map((f) => f.score).filter((n) => typeof n === 'number')
   return {
     ...session,
     endedAt: Date.now(),
     framesProduced: frames.length,
     kept,
+    sent,
     outcome,
     meanScore: scores.length ? round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
     meanConfidence: typeof meanConfidence === 'number' ? round(meanConfidence) : session.meanConfidence,
@@ -250,7 +261,9 @@ export function verdict(summary, rules, { now = Date.now() } = {}) {
 const CSV_COLUMNS = [
   'id', 'demo', 'startedAt', 'endedAt', 'minutesInside', 'returning', 'people', 'squad',
   'queueAtStart', 'retakes', 'outcome', 'keptMeasurement', 'keptPost', 'keptCandid',
+  'sentMeasurement', 'sentPost', 'sentCandid',
   'sharedMeasurement', 'sharedPost', 'sharedCandid', 'framesProduced', 'meanScore',
+  'poseSet', 'returnIntent', 'operatorPresent',
   'captureWidth', 'captureHeight', 'resolutionTier', 'meanConfidence', 'cameraLabel',
 ]
 
@@ -275,9 +288,13 @@ export function toCsv(sessions) {
       s.retakes ?? 0,
       s.outcome,
       s.kept.measurement, s.kept.post, s.kept.candid,
+      s.sent?.measurement ?? 0, s.sent?.post ?? 0, s.sent?.candid ?? 0,
       s.shared.measurement, s.shared.post, s.shared.candid,
       s.framesProduced,
       s.meanScore ?? '',
+      s.poseSet ?? '',
+      s.returnIntent ?? '',
+      s.operatorPresent === null || s.operatorPresent === undefined ? '' : (s.operatorPresent ? 'yes' : 'no'),
       s.captureWidth ?? '', s.captureHeight ?? '',
       resolutionTier(s.captureWidth),
       s.meanConfidence ?? '',

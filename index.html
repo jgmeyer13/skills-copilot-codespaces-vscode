@@ -77,6 +77,8 @@ button[disabled] { opacity: 0.4; cursor: not-allowed; }
 #app[data-screen='capture']  .screen[data-id='capture'],
 #app[data-screen='review']   .screen[data-id='review'],
 #app[data-screen='compare']  .screen[data-id='compare'],
+#app[data-screen='poseset'] .screen[data-id='poseset'],
+#app[data-screen='done']    .screen[data-id='done'],
 #app[data-screen='dashboard'].screen[data-id='dashboard'],
 #app[data-screen='dashboard'] .screen[data-id='dashboard'] { display: flex; }
 
@@ -165,21 +167,35 @@ p  { margin: 0 0 12px; color: var(--text-2); line-height: 1.6; font-size: clamp(
   background: linear-gradient(0deg, rgba(5,7,10,0.94), rgba(5,7,10,0));
   text-align: center;
 }
-.cue-title { font-size: clamp(24px, 4.6vw, 42px); font-weight: 700; letter-spacing: -0.01em; }
-.cue-text { font-size: clamp(14px, 2vw, 19px); color: var(--text-2); margin-top: 6px; }
-.cue-count { font-size: clamp(40px, 9vw, 86px); font-weight: 300; line-height: 1; margin-top: 4px; }
+/*
+ * Sized for 2.5 m, not for a desk.
+ *
+ * The member stands on a mark two and a half metres from a laptop screen.
+ * That is roughly four times a normal reading distance, so text that is
+ * comfortable while you are building this is unreadable while you are using
+ * it — and a cue nobody can read is a pose nobody can hold.
+ *
+ * The title and the count carry the work, because those are what is needed
+ * mid-pose. The detail line is read once while stepping onto the mark, so it
+ * is allowed to be smaller than the rest, but not as small as it was.
+ */
+.cue-title { font-size: clamp(30px, 5.6vw, 58px); font-weight: 700; letter-spacing: -0.01em; }
+.cue-text { font-size: clamp(17px, 2.6vw, 28px); color: #cdd8e6; margin-top: 8px; }
+.cue-count { font-size: clamp(46px, 10vw, 104px); font-weight: 300; line-height: 1; margin-top: 6px; }
 
 .steps { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 7px; }
 .steps i { width: 36px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.22); }
 .steps i.done { background: var(--go); }
 .steps i.now { background: var(--stop); }
 
+/* "Got it" / "Adjust" is feedback on a pose being held right now, so it has
+ * to be readable from the mark as well. */
 .badge {
-  position: absolute; top: 16px; right: 16px; display: flex; align-items: center; gap: 7px;
-  background: rgba(5,7,10,0.72); border: 1px solid var(--edge); border-radius: 999px;
-  padding: 7px 13px; font-size: 13px; color: var(--text-2);
+  position: absolute; top: 16px; right: 16px; display: flex; align-items: center; gap: 9px;
+  background: rgba(5,7,10,0.78); border: 1px solid var(--edge); border-radius: 999px;
+  padding: 10px 18px; font-size: clamp(15px, 1.8vw, 20px); color: var(--text-2);
 }
-.badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--stop); }
+.badge .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--stop); }
 .badge.good .dot { background: var(--go); }
 
 .topleft { position: absolute; top: 16px; left: 16px; display: flex; gap: 8px; }
@@ -190,23 +206,133 @@ p  { margin: 0 0 12px; color: var(--text-2); line-height: 1.6; font-size: clamp(
 
 /* ── review ──────────────────────────────────────────────────────────────── */
 
-.frames { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; overflow-y: auto; }
+/*
+ * The cards carry two toggles each now, which made them tall enough to
+ * overflow this area and slide underneath the buttons below — the last card's
+ * controls became unclickable, sitting behind "Send now".
+ *
+ * So the wrapper is the thing with the bounded height and the scroll, and the
+ * grid is free to be as tall as it likes inside it. A flex child will not
+ * shrink below its content without min-height: 0, which is what let the grid
+ * push past its parent in the first place.
+ */
+.frames-wrap { display: flex; min-height: 0; overflow-y: auto; }
+.frames {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px; align-content: start; width: 100%;
+}
 .frame-card { background: var(--surface); border: 2px solid var(--hair); border-radius: var(--r); overflow: hidden; display: flex; flex-direction: column; }
-.frame-card.kept { border-color: var(--go); }
+.frame-card.chosen { border-color: var(--go); }
 .frame-card img { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; background: #000; }
-.frame-meta { padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.frame-meta b { font-size: 14px; }
-.frame-kind { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-3); }
-.frame-card.measurement .frame-kind { color: var(--info); }
-.frame-toggle { width: 100%; padding: 11px; border-top: 1px solid var(--hair); font-size: 14px; font-weight: 600; color: var(--text-2); }
-.frame-card.kept .frame-toggle { color: var(--go); }
+.frame-label {
+  margin: 0; padding: 10px 12px 9px; font-size: 13px; line-height: 1.35;
+  color: var(--text-2); border-top: 1px solid var(--hair); min-height: 3.1em;
+}
+/*
+ * Two toggles per photograph, because they answer different questions:
+ * "I want this picture" and "remember me". Both start off, and the second
+ * is the only one that leaves anything on this laptop.
+ */
+.frame-toggle {
+  width: 100%; padding: 12px 10px; border-top: 1px solid var(--hair);
+  font-size: 13.5px; font-weight: 600; color: var(--text-2); text-align: left;
+}
+.frame-toggle[aria-pressed='true'] { color: var(--go); background: rgba(45,214,122,0.09); }
+
+/* ── consent, the short version ──────────────────────────────────────────── */
+
+.consent-lines { list-style: none; margin: 0 0 22px; padding: 0; max-width: 30ch; text-align: left; }
+.consent-lines li {
+  font-size: clamp(17px, 2.5vw, 24px); line-height: 1.45; color: var(--text);
+  margin-bottom: 18px; padding-left: 26px; position: relative;
+}
+.consent-lines li::before {
+  content: ''; position: absolute; left: 0; top: 0.55em;
+  width: 9px; height: 9px; border-radius: 50%; background: var(--go);
+}
+
+/* ── which pose set ──────────────────────────────────────────────────────── */
+
+.setpick { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 26px; }
+.setpick button {
+  background: var(--surface); border: 1px solid var(--edge); border-radius: var(--r);
+  padding: 26px 30px; min-width: 240px; text-align: left; cursor: pointer; color: var(--text);
+}
+.setpick button:hover { border-color: var(--go); }
+.setpick b { display: block; font-size: 24px; margin-bottom: 7px; }
+.setpick span { font-size: 15px; color: var(--text-2); line-height: 1.45; }
+
+/* ── the code, big enough to photograph ──────────────────────────────────── */
+
+.code-big { font-size: clamp(44px, 11vw, 104px); font-weight: 700; letter-spacing: 0.06em; margin: 10px 0 6px; }
+.code-count { font-size: 15px; color: var(--text-3); }
 
 /* ── compare ─────────────────────────────────────────────────────────────── */
 
-.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 760px; margin: 0 auto; width: 100%; }
-.compare figure { margin: 0; }
-.compare img { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: var(--r); border: 1px solid var(--hair); background: #000; }
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 760px; margin: 0 auto; width: 100%; height: 100%; min-height: 0; }
+.compare[hidden] { display: none; }
+.compare figure { margin: 0; display: flex; flex-direction: column; min-height: 0; }
+.compare img { width: 100%; flex: 1 1 auto; min-height: 0; aspect-ratio: 3/4; object-fit: cover; border-radius: var(--r); border: 1px solid var(--hair); background: #000; }
 .compare figcaption { display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; color: var(--text-3); }
+
+/* ── then and now, slid across ───────────────────────────────────────────── */
+/*
+ * Side by side stays the default because it shows both bodies at once, which
+ * is what you actually want when judging whether anything changed. The wipe
+ * is the better view for a small change in one place, and it is the one
+ * people enjoy — so it is offered, not imposed.
+ *
+ * Both images are drawn at the same size from the same mark under the same
+ * light, which is the only reason overlaying them means anything at all.
+ */
+/*
+ * The wipe shows one photograph at full width where side by side shows two at
+ * half, so it is nearly twice as tall. Left to size itself it pushed the
+ * "Side by side" and "Done" buttons off the bottom of a laptop screen: a
+ * member could switch to this view and then have no way back and no way out.
+ *
+ * So the stack takes its height from the space the column actually has, and
+ * derives its width from that. It is the height that is scarce here, never
+ * the width.
+ */
+.wipe { max-width: 460px; margin: 0 auto; width: 100%; height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.wipe[hidden] { display: none; }
+.wipe-stack {
+  position: relative; flex: 1 1 auto; min-height: 0;
+  height: 100%; aspect-ratio: 3/4; width: auto; max-width: 100%; margin: 0 auto;
+  border-radius: var(--r);
+  overflow: hidden; border: 1px solid var(--hair); background: #000;
+  touch-action: none; cursor: ew-resize;
+}
+/*
+ * Both images are laid out identically and full size, and the reveal is a
+ * clip-path on the top one. The obvious alternative — a narrowing container
+ * with the image inside it — resizes that image as the handle moves, so the
+ * two bodies drift apart as you slide and the comparison stops meaning
+ * anything. Clipping changes what you can see; it never changes the geometry.
+ */
+.wipe-stack img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#wipe-now { clip-path: inset(0 calc(100% - var(--wipe, 50%)) 0 0); }
+.wipe-handle {
+  position: absolute; top: 0; bottom: 0; left: 50%; width: 2px;
+  background: rgba(255,255,255,0.9); transform: translateX(-1px); pointer-events: none;
+}
+.wipe-handle span {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  width: 38px; height: 38px; border-radius: 50%; background: rgba(255,255,255,0.92);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+}
+.wipe-range { display: block; margin-top: 14px; }
+.wipe-range input { width: 100%; }
+.wipe-keys { display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; color: var(--text-3); }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+.seg { display: flex; gap: 0; max-width: 460px; margin: 0 auto 4px; border: 1px solid var(--edge); border-radius: 999px; overflow: hidden; }
+.seg button {
+  flex: 1; background: none; border: 0; color: var(--text-2);
+  padding: 11px 10px; font: inherit; font-size: 15px; cursor: pointer;
+}
+.seg button[aria-pressed='true'] { background: var(--surface-2); color: var(--text); }
 
 /* ── dashboard ───────────────────────────────────────────────────────────── */
 
@@ -317,6 +443,49 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
 }
 .banner[hidden] { display: none; }
 
+/*
+ * The idle warning sits at the top rather than the bottom, because the bottom
+ * of every member-facing screen is where the buttons are and this must not
+ * look like one.
+ */
+.idle {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 60;
+  background: rgba(255,176,46,0.16); border-bottom: 1px solid rgba(255,176,46,0.5);
+  color: #ffd79a; padding: 11px 20px; font-size: 15px; text-align: center;
+}
+.idle[hidden] { display: none; }
+
+/* ── the forget-me sheet ─────────────────────────────────────────────────── */
+/*
+ * The consent text promises deletion "in front of you", so this is deliberately
+ * not a toast that happens somewhere off screen. It states what is about to go
+ * before it goes, and reports back what actually went.
+ */
+
+.linkbtn {
+  background: none; border: 0; padding: 6px 0; color: var(--text-2);
+  font: inherit; font-size: 14px; text-decoration: underline;
+  text-underline-offset: 3px; cursor: pointer;
+}
+.linkbtn:hover { color: var(--text); }
+
+.sheet {
+  position: fixed; inset: 0; z-index: 80; display: flex;
+  align-items: center; justify-content: center; padding: 24px;
+  background: rgba(6,8,11,0.78); backdrop-filter: blur(3px);
+}
+.sheet[hidden] { display: none; }
+.sheet-card {
+  background: var(--surface-2); border: 1px solid var(--edge); border-radius: 18px;
+  padding: 26px 26px 22px; max-width: 460px; width: 100%;
+  box-shadow: 0 26px 70px rgba(0,0,0,0.6);
+}
+.sheet-card h3 { margin: 0 0 10px; font-size: 20px; }
+.sheet-card p { margin: 0 0 12px; color: var(--text-2); font-size: 15px; line-height: 1.5; }
+.sheet-card ul { margin: 0 0 16px; padding-left: 20px; color: var(--text-2); font-size: 15px; }
+.sheet-card li { margin-bottom: 5px; }
+.sheet-card .row { margin-top: 18px; }
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -336,6 +505,12 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
       <p class="lead" id="attract-venue"></p>
       <button class="btn btn-go btn-xl" id="start" style="margin-top:28px">Take your photos</button>
       <div class="price" id="attract-price"></div>
+      <!--
+        On the first screen on purpose. A deletion request that requires
+        finding an operator and asking them a favour is not a right anybody
+        will exercise.
+      -->
+      <button class="linkbtn" id="forget-me" style="margin-top:22px">Delete everything about me</button>
     </div>
     <div class="pad row" style="justify-content:space-between;align-items:center">
       <span class="brandline"><b>Pilot</b> <span id="attract-count"></span></span>
@@ -368,19 +543,50 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
       <h2 id="consent-title">Before we record anything</h2>
       <div class="langs" id="langs" role="group" aria-label="Language"></div>
     </div>
-    <div class="consent-scroll" id="consent-body"></div>
-    <div class="ticks">
-      <label class="tick"><input type="checkbox" id="tick-age" /><span id="tick-age-label">I am 18 or older.</span></label>
-      <label class="tick"><input type="checkbox" id="tick-record" /><span>I agree to the 30-second recording.</span></label>
-      <label class="tick optional"><input type="checkbox" id="tick-keep" /><span id="tick-keep-label">Keep my photos on this laptop so I can see them next visit.<small>Optional. Leave this off and you still get your photos to take away.</small></span></label>
+    <div class="grow center pad" style="padding-top:0">
+      <ul class="consent-lines" id="consent-lines"></ul>
+      <button class="linkbtn" id="consent-more">The longer version</button>
     </div>
     <div class="pad row">
       <button class="btn btn-ghost" data-back>Back</button>
-      <button class="btn btn-go grow" id="consent-next" disabled>I agree — continue</button>
+      <!--
+        One button, as specified. The age confirmation rides on it rather than
+        being dropped: under 18 is the one mistake in this pilot with no cure,
+        and a separate tick was the only thing standing in front of it.
+      -->
+      <button class="btn btn-go grow btn-xl" id="consent-next">I'm in — I'm 18 or older</button>
     </div>
   </section>
 
-  <!-- ── ready ── -->
+  <!-- the full text, for anyone who wants it, over the top of the short one -->
+  <div class="sheet" id="consent-sheet" hidden>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-label="The longer version">
+      <div class="consent-scroll" id="consent-body"></div>
+      <div class="row"><button class="btn btn-ghost grow" id="consent-close">Close</button></div>
+    </div>
+  </div>
+
+  <!-- ── the code, big enough to photograph across a room ── -->
+  <div class="sheet" id="code-sheet" hidden>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-label="Your member code" style="text-align:center">
+      <p style="margin:0">Your code</p>
+      <div class="code-big mono" id="code-big"></div>
+      <p style="margin:0 0 4px;font-size:17px;color:var(--text)">Photograph this code.</p>
+      <p class="code-count" id="code-count"></p>
+      <div class="row"><button class="btn btn-go grow" id="code-got">Got it</button></div>
+    </div>
+  </div>
+
+  <!-- ── which poses ── -->
+  <section class="screen" data-id="poseset">
+    <div class="grow center pad">
+      <h1>Which set?</h1>
+      <p class="lead" style="max-width:38ch">The first shot is the same either way — that is the one that lines up next time.</p>
+      <div class="setpick" id="setpick"></div>
+    </div>
+    <div class="pad row"><button class="btn btn-ghost" data-back>Back</button></div>
+  </section>
+
   <section class="screen" data-id="ready">
     <div class="stage">
       <video id="cam" autoplay playsinline muted></video>
@@ -425,19 +631,61 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
       <p id="review-sub">Tap the ones you want. Nothing is saved until you choose.</p>
       <p id="review-code" hidden style="margin:0">Your code: <b class="code-out" id="review-code-value"></b><br/><span class="tiny">Save it — it is the only way to see these next to your next visit.</span></p>
     </div>
-    <div class="pad grow" style="padding-top:0"><div class="frames" id="frames"></div></div>
+    <div class="pad grow frames-wrap" style="padding-top:0"><div class="frames" id="frames"></div></div>
     <div class="pad row">
-      <button class="btn btn-stop" id="wipe-all">Send &amp; wipe everything</button>
-      <button class="btn grow" id="share">Share / save</button>
-      <button class="btn btn-go grow" id="keep-done">Done</button>
+      <button class="btn grow" id="share">Send now</button>
+      <button class="btn btn-go grow" id="review-done">Done</button>
+    </div>
+    <div class="pad" style="padding-top:0">
+      <button class="linkbtn" data-forget>Delete everything of mine on this laptop</button>
     </div>
   </section>
 
   <!-- ── compare ── -->
   <section class="screen" data-id="compare">
     <div class="pad" style="padding-bottom:12px"><h2>Then and now</h2><p id="compare-sub"></p></div>
-    <div class="pad grow"><div class="compare" id="compare"></div></div>
+    <div class="pad grow">
+      <div class="compare" id="compare"></div>
+      <div class="wipe" id="wipe-view" hidden>
+        <div class="wipe-stack" id="wipe-stack">
+          <img id="wipe-then" alt="Your first visit" />
+          <img id="wipe-now" alt="Today" />
+          <div class="wipe-handle" id="wipe-handle"><span></span></div>
+        </div>
+        <label class="wipe-range">
+          <span class="vh">Slide between your first visit and today</span>
+          <input type="range" id="wipe-slider" min="0" max="100" value="50" />
+        </label>
+        <div class="wipe-keys"><span id="wipe-key-then"></span><span id="wipe-key-now"></span></div>
+      </div>
+    </div>
+    <div class="pad" style="padding-top:0;padding-bottom:0">
+      <div class="seg" role="group" aria-label="How to compare">
+        <button id="view-side" aria-pressed="true">Side by side</button>
+        <button id="view-wipe" aria-pressed="false">Slide across</button>
+      </div>
+    </div>
     <div class="pad row"><button class="btn btn-go btn-block" id="compare-done">Done</button></div>
+    <div class="pad" style="padding-top:0">
+      <button class="linkbtn" data-forget>Delete everything of mine on this laptop</button>
+    </div>
+  </section>
+
+  <!-- ── done ── -->
+  <section class="screen" data-id="done">
+    <div class="grow center pad">
+      <h1 id="done-line">Done.</h1>
+      <p class="lead" id="done-detail"></p>
+      <div style="margin-top:34px">
+        <p class="lead" style="margin-bottom:14px">Come back in 4 weeks to see the difference?</p>
+        <div class="row" id="return-intent" style="justify-content:center">
+          <button class="btn btn-xl" data-intent="yes" aria-pressed="false">Yes</button>
+          <button class="btn btn-xl" data-intent="maybe" aria-pressed="false">Maybe</button>
+          <button class="btn btn-xl" data-intent="no" aria-pressed="false">No</button>
+        </div>
+      </div>
+    </div>
+    <div class="pad row"><button class="btn btn-ghost btn-block" id="done-skip">Finish</button></div>
   </section>
 
   <!-- ── dashboard ── -->
@@ -453,6 +701,7 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
             <button id="q-minus">−</button><b class="mono" id="q-value">0</b><button id="q-plus">+</button>
             <span class="tiny">queue</span>
           </div>
+          <button class="btn btn-ghost" id="forget-member">Delete a member</button>
           <button class="btn btn-ghost" id="export-csv">Export CSV</button>
           <button class="btn btn-go" id="start-pilot">Start real pilot</button>
           <button class="btn btn-ghost" id="close-dash">Close</button>
@@ -479,6 +728,24 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
   </section>
 
   <div class="banner" id="banner" hidden></div>
+
+  <!-- ── idle warning ── -->
+  <div class="idle" id="idle-warning" hidden>
+    <b>Still there?</b> Touch the screen. This clears itself in a moment so the
+    next person does not see your session.
+  </div>
+
+  <!-- ── forget me ── -->
+  <div class="sheet" id="forget-sheet" hidden>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="forget-title">
+      <h3 id="forget-title">Delete everything of yours?</h3>
+      <div id="forget-body"></div>
+      <div class="row">
+        <button class="btn btn-ghost grow" id="forget-cancel">No, go back</button>
+        <button class="btn btn-stop grow" id="forget-go">Yes, delete it</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script type="module" src="./app.js"></script>

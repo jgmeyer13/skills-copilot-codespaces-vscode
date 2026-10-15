@@ -18,6 +18,8 @@ Three documents matter more than the code:
 - **[CHECKLIST.md](CHECKLIST.md)** — twenty minutes with your own webcam, first.
 - **[DECISIONS.md](DECISIONS.md)** — the go/no-go thresholds, written before the data.
 - **[RISKS-POPIA.md](RISKS-POPIA.md)** — the risk register, re-ranked for POPIA.
+- **[RUNSHEET.md](RUNSHEET.md)** — one page, for the person actually on shift.
+- **[POPIA-PACK.md](POPIA-PACK.md)** — the standalone pack for a legal reader.
 
 ## The flow
 
@@ -28,7 +30,9 @@ Three documents matter more than the code:
 | **Mirror** | Live view with a floor mark, and the blue ghost outline of the member's last visit if they kept one. |
 | **Capture** | Thirty seconds, solo or up to three. MediaPipe Pose runs in the browser and picks the best held frame per pose, plus one candid. |
 | **Review** | Five photographs, **unlabelled, in random order**. Keep, or send and wipe. Anything not kept is deleted immediately; anything missed is deleted at end of day. The member is never told which frame is the comparison one — which one they keep is the measurement, and an interface that explains the measurement to its subject has destroyed it. |
-| **Compare** | Returning members who kept a comparison frame see then and now. |
+| **Compare** | Returning members who kept a comparison frame see then and now — side by side by default, with a slide-across view on request. Side by side leads because it shows both bodies at once; the wipe looks better and shows half as much. |
+| **Walk away** | Every member-facing screen clears itself after a period of no touching, with a warning first. A review screen left unattended deletes its photographs rather than leaving them for the midnight sweep, and the session is logged `abandoned` so it never counts against keep rate. Capture and the operator screen are exempt: holding still is the task, and the operator is standing there. |
+| **Forget me** | A member can have everything of theirs deleted on the spot, from the screen they are holding or by the operator a week later. Photographs, outline and identifier go; the image-free session row stays, stripped of its key. |
 | **Operator** | The dashboard, fed by real sessions. **Sealed while the pilot runs** — raw counts only, no verdicts — and it unseals itself when both end conditions in `DECISIONS.md` are met. Also where the camera's resolution and the model's mean confidence are read against keep rate. |
 
 ## Demo data, and the gate

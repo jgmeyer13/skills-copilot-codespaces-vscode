@@ -178,6 +178,19 @@ export async function setFrameKept(id, kept) {
   return frame
 }
 
+/*
+ * Sending and keeping are independent, so they are stored independently.
+ * A frame marked sent but not kept goes to the member's phone and is then
+ * deleted from this laptop at the end of the session.
+ */
+export async function setFrameSent(id, sent) {
+  const frame = await get('frames', id)
+  if (!frame) return null
+  frame.sent = sent
+  await put('frames', frame)
+  return frame
+}
+
 export async function deleteFrame(id) {
   return del('frames', id)
 }
@@ -189,18 +202,33 @@ export async function deleteSessionFrames(sessionId) {
   return rows.length
 }
 
-/** Everything of one member's, images and record alike. The s24 request. */
+/**
+ * Everything of one member's, images and record alike. The s24 request.
+ *
+ * Three stores are touched and each for a different reason. Frames and the
+ * member row are theirs, so they go. Sessions stay, because an image-free
+ * row carrying no key is no longer about anybody and deleting it would
+ * quietly corrupt the pilot's own arithmetic — but the key goes with them.
+ * Consent records stay for the same reason and lose their key too: the proof
+ * that consent was given on a date is a record about the operator's conduct,
+ * not a profile of the member.
+ */
 export async function forgetMember(memberKey) {
   const frames = await tx('frames', 'readonly', (s) => s.index('memberKey').getAll(memberKey))
   await Promise.all(frames.map((f) => del('frames', f.id)))
   await del('members', memberKey)
+
   const sessions = await tx('sessions', 'readonly', (s) => s.index('memberKey').getAll(memberKey))
-  // The sessions stay, because they hold no image and no identifier once the
-  // member key is gone — but the key itself has to go with them.
   await Promise.all(
     sessions.map((row) => put('sessions', { ...row, memberKey: null, forgotten: true })),
   )
-  return { frames: frames.length, sessions: sessions.length }
+
+  const consents = (await all('consents')).filter((c) => c.memberKey === memberKey)
+  await Promise.all(
+    consents.map((row) => put('consents', { ...row, memberKey: null, forgotten: true })),
+  )
+
+  return { frames: frames.length, sessions: sessions.length, consents: consents.length }
 }
 
 // ── consent ────────────────────────────────────────────────────────────────
