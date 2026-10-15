@@ -1,0 +1,77 @@
+{
+  "_comment": "Everything an operator or a lawyer might change without touching code. Loaded at startup; edit and reload the page.",
+
+  "brand": {
+    "name": "PODIUM",
+    "workingName": true,
+    "tagline": "Same light. Every time."
+  },
+
+  "pilot": {
+    "venue": "Aspire Fitness",
+    "city": "Stellenbosch",
+    "country": "South Africa",
+    "currency": "ZAR",
+    "currencySymbol": "R",
+    "pricePerSession": 20,
+    "startDate": null,
+    "plannedWeeks": 4,
+    "openHour": 6,
+    "closeHour": 21
+  },
+
+  "responsibleParty": {
+    "_comment": "POPIA s1. Who decides the purpose and means of processing, and who members contact about their information. A lawyer should confirm whether this is the gym or PODIUM, and whether an operator agreement under s20-21 is needed between them.",
+    "name": "PODIUM Pilot (sole operator)",
+    "contactEmail": "CHANGE-ME@example.co.za",
+    "contactPhone": "CHANGE-ME",
+    "informationOfficer": "CHANGE-ME"
+  },
+
+  "privacy": {
+    "_comment": "The settings that carry the most legal weight. Changing any of these changes what the consent screen promises, so change both together.",
+
+    "storePhoneNumber": false,
+    "_storePhoneNumber": "false means the phone number is salted and hashed on the device and the number itself is never written to storage. Returning members are still recognised, because the same number hashes to the same key. Set true only if you have a reason to hold the number, and change the consent text to say so.",
+
+    "phoneSalt": "CHANGE-ME-before-the-pilot-any-long-random-string",
+
+    "minimumAge": 18,
+    "unkeptFramesPurgedAt": "end-of-day",
+    "keptFrameRetentionDays": 180,
+    "_keptFrameRetentionDays": "POPIA s14: no longer than necessary. 180 days covers a progress comparison across a season. Kept frames older than this are deleted on startup.",
+
+    "everythingStaysOnThisDevice": true,
+    "_everythingStaysOnThisDevice": "No image ever leaves this device except when the member themselves shares it. That is what keeps the pilot clear of POPIA s72 (cross-border transfer) entirely, so do not add a cloud backup without legal advice."
+  },
+
+  "capture": {
+    "_comment": "The 30 seconds, as a script. Each step names the frame it is trying to produce.",
+    "totalSeconds": 30,
+    "maxPeople": 3,
+    "steps": [
+      { "id": "measure", "kind": "measurement", "pose": "front_relaxed", "seconds": 7, "title": "Stand on the mark", "cue": "Arms relaxed by your side, feet on the ring, look at the camera. This is the one we compare." },
+      { "id": "pose1", "kind": "post", "pose": "front_double_bicep", "seconds": 7, "title": "Front double bicep", "cue": "Arms up and out, wrists curled in. Breathe out." },
+      { "id": "pose2", "kind": "post", "pose": "side_chest", "seconds": 6, "title": "Side chest", "cue": "Turn to your right. Near arm across, press the chest forward." },
+      { "id": "pose3", "kind": "post", "pose": "back_double_bicep", "seconds": 6, "title": "Back double bicep", "cue": "Turn around. Elbows up, squeeze the shoulder blades." },
+      { "id": "candid", "kind": "candid", "pose": "any", "seconds": 4, "title": "However you like", "cue": "Move. Mess about. This one is for the post." }
+    ]
+  },
+
+  "light": {
+    "_comment": "The pilot runs one fixed setup so the measurement frames are comparable. Presets come later, if members ask for them.",
+    "setup": "noir",
+    "description": "One hard top light, roughly 300mm above and 200mm in front of the mark, pointed down at the shoulders. Nothing else on. Curtain closed."
+  },
+
+  "decisionRules": {
+    "_comment": "Pre-registered before the pilot starts. The dashboard scores live numbers against these. Written down first so the result cannot be re-interpreted afterwards. See DECISIONS.md for the reasoning.",
+    "minimumWeeks": 4,
+    "minimumSessions": 120,
+    "returnWithin14Days": { "go": 0.30, "weak": 0.15 },
+    "keepRate": { "go": 0.55, "weak": 0.35 },
+    "squadShare": { "go": 0.25 },
+    "measurementKeptShare": { "instrument": 0.45, "photobooth": 0.2 },
+    "medianMinutesInside": { "ceiling": 6 }
+  }
+}
