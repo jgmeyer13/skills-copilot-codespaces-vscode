@@ -151,6 +151,7 @@ export function summarise(sessions, { now = Date.now() } = {}) {
     today: done.filter((s) => s.startedAt >= startOfToday.getTime()).length,
     members: firstVisit.size,
     weeksRunning: done.length ? (now - Math.min(...done.map((s) => s.startedAt))) / (7 * DAY) : 0,
+    daysRunning: done.length ? (now - Math.min(...done.map((s) => s.startedAt))) / DAY : 0,
 
     returnCohort: eligible,
     returnWithin14Days: rate(returned, eligible),
@@ -187,7 +188,24 @@ export function summarise(sessions, { now = Date.now() } = {}) {
 export function verdict(summary, rules, { now = Date.now() } = {}) {
   const weeksLeft = Math.max(0, rules.minimumWeeks - summary.weeksRunning)
   const sessionsLeft = Math.max(0, rules.minimumSessions - summary.sessions)
-  const enough = weeksLeft === 0 && sessionsLeft === 0
+  const metBoth = weeksLeft === 0 && sessionsLeft === 0
+
+  /*
+   * A backstop, so the seal cannot outlive the pilot.
+   *
+   * The two conditions are an AND, which means a pilot that runs its four
+   * weeks but only reaches 90 sessions stays sealed for ever and the numbers
+   * are never looked at. That is a worse failure than reading a thin sample,
+   * because at least a thin sample can be reported as thin.
+   *
+   * So it also opens on day 35 whatever the count, and says so on the sealed
+   * panel from day one — a deadline nobody is told about is not a deadline,
+   * it is a surprise.
+   */
+  const hardOpenDays = rules.unsealByDay ?? null
+  const daysLeft = hardOpenDays === null ? null : Math.max(0, hardOpenDays - (summary.daysRunning ?? 0))
+  const openedByTime = hardOpenDays !== null && daysLeft === 0 && summary.sessions > 0
+  const enough = metBoth || openedByTime
 
   if (!enough) {
     return {
@@ -195,12 +213,18 @@ export function verdict(summary, rules, { now = Date.now() } = {}) {
       enough: false,
       weeksLeft,
       sessionsLeft,
+      daysLeft,
+      unsealByDay: hardOpenDays,
       rows: [],
       squad: null,
       character: null,
       overall: 'running',
     }
   }
+
+  // Reading early because the clock ran out is a different claim from reading
+  // because the pilot finished, and the dashboard has to say which it is.
+  const openedEarly = openedByTime && !metBoth
 
   const band = (value, spec) =>
     value >= spec.go ? 'go' : spec.weak !== undefined && value >= spec.weak ? 'weak' : 'no'
@@ -239,8 +263,11 @@ export function verdict(summary, rules, { now = Date.now() } = {}) {
   return {
     sealed: false,
     enough: true,
-    weeksLeft: 0,
-    sessionsLeft: 0,
+    weeksLeft,
+    sessionsLeft,
+    // True when the day-35 backstop opened this, not the two conditions.
+    openedEarly,
+    unsealByDay: hardOpenDays,
     rows,
     // Not a go/no-go. A low squad share is a reason to build the solo product
     // first, never a reason not to build.

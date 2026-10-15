@@ -416,6 +416,19 @@ table.log td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); color
 }
 .code-out { font-family: var(--mono); font-size: clamp(28px, 6vw, 46px); letter-spacing: 0.18em; color: var(--go); }
 
+/*
+ * Whether somebody was standing there explaining it. A pilot run with an
+ * operator at the member's shoulder is measuring a different product from one
+ * run alone in a corner, and the keep rate will not tell them apart.
+ */
+.optoggle { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-2); cursor: pointer; }
+.optoggle input { width: 18px; height: 18px; }
+
+.early {
+  margin: 0 0 12px; padding: 11px 14px; border-radius: 10px; font-size: 14px;
+  background: rgba(255,176,46,0.12); border: 1px solid rgba(255,176,46,0.45); color: #ffd79a;
+}
+
 /* ── sealed dashboard ────────────────────────────────────────────────────── */
 
 .sealed {
@@ -454,6 +467,40 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
   color: #ffd79a; padding: 11px 20px; font-size: 15px; text-align: center;
 }
 .idle[hidden] { display: none; }
+
+/* ── silhouettes, the countdown bar, and the five seconds before ────────── */
+
+/*
+ * The figure sits above the words and behind nothing. At 2.5 m it is the
+ * first thing read and often the only thing read, so it gets the room.
+ */
+.silo-wrap {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -58%);
+  width: min(32vh, 30vw); color: rgba(255,255,255,0.9); pointer-events: none;
+  filter: drop-shadow(0 4px 18px rgba(0,0,0,0.65));
+}
+.silo { width: 100%; height: auto; display: block; }
+
+.cue-bar {
+  margin: 14px auto 0; width: min(520px, 70%); height: 7px;
+  background: rgba(255,255,255,0.18); border-radius: 99px; overflow: hidden;
+}
+.cue-bar i { display: block; height: 100%; width: 0%; background: var(--go); border-radius: 99px; }
+
+/*
+ * Five seconds between pressing the button and the first pose, because the
+ * member has to walk to the mark and decide about their shirt, and doing that
+ * while the first pose is already counting down is how you get a bad
+ * progress shot on every first visit.
+ */
+.preroll {
+  position: fixed; inset: 0; z-index: 70; display: flex;
+  flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(5,7,10,0.92); text-align: center; padding: 24px;
+}
+.preroll[hidden] { display: none; }
+.preroll-line { font-size: clamp(26px, 5vw, 50px); font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; }
+.preroll-count { font-size: clamp(70px, 16vw, 170px); font-weight: 300; line-height: 1; margin-top: 18px; color: var(--go); }
 
 /* ── the forget-me sheet ─────────────────────────────────────────────────── */
 /*
@@ -616,10 +663,12 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
       <div class="steps" id="cap-steps"></div>
       <div class="badge" id="cap-badge"><span class="dot"></span><span id="cap-badge-text">—</span></div>
       <div class="topleft"><button class="btn btn-stop" id="cap-abort" style="min-height:44px;padding:0 16px">Stop</button></div>
+      <div class="silo-wrap" id="cap-silo"></div>
       <div class="cue">
         <div class="cue-title" id="cap-title">Get ready</div>
         <div class="cue-text" id="cap-cue"></div>
         <div class="cue-count mono" id="cap-count"></div>
+        <div class="cue-bar"><i id="cap-bar"></i></div>
       </div>
     </div>
   </section>
@@ -701,6 +750,7 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
             <button id="q-minus">−</button><b class="mono" id="q-value">0</b><button id="q-plus">+</button>
             <span class="tiny">queue</span>
           </div>
+          <label class="optoggle"><input type="checkbox" id="operator-present" /><span>Operator present</span></label>
           <button class="btn btn-ghost" id="forget-member">Delete a member</button>
           <button class="btn btn-ghost" id="export-csv">Export CSV</button>
           <button class="btn btn-go" id="start-pilot">Start real pilot</button>
@@ -712,6 +762,11 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
       <div class="verdict" id="verdict" hidden></div>
       <dl class="tiles" id="tiles"></dl>
       <div class="rules" id="rules" hidden></div>
+
+      <h2 style="font-size:16px;margin:22px 0 10px">Live — where people get to, and what broke</h2>
+      <p class="tiny" style="margin:-4px 0 10px">Counts, not verdicts. These stay visible while the pilot runs, because
+      a member who leaves at the consent screen writes no session row and is otherwise invisible.</p>
+      <dl class="tiles" id="funnel"></dl>
 
       <h2 style="font-size:16px;margin:22px 0 10px">Image quality and what the model could see</h2>
       <table class="quality"><thead><tr>
@@ -726,6 +781,11 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
       <p class="tiny" style="margin-top:22px" id="dash-foot"></p>
     </div>
   </section>
+
+  <div class="preroll" id="preroll" hidden>
+    <div class="preroll-line">Stand on the tape mark.<br/>Shirt on or off — your call.</div>
+    <div class="preroll-count mono" id="preroll-count">5</div>
+  </div>
 
   <div class="banner" id="banner" hidden></div>
 
