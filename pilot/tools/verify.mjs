@@ -163,6 +163,21 @@ async function tap(page, selector, note = '') {
   }
 }
 
+/**
+ * Open an operator tab before touching anything inside it.
+ *
+ * The console used to be one scrolling page and every step could reach any
+ * panel. It is four tabs now, and a panel in a tab that is not open is
+ * hidden — which reads as "the sealed panel is missing" rather than "you are
+ * looking at the wrong tab".
+ */
+async function openTab(page, name) {
+  await page.evaluate(() => window.__pilot.show('dashboard'))
+  await page.locator(`#dash-tabs button[data-tab="${name}"]`).click()
+  await page.waitForSelector(`.tabpane[data-pane="${name}"]:not([hidden])`, { timeout: 10_000 })
+  await page.waitForTimeout(250)
+}
+
 async function runSession(page, { who, people = 1, keepHistory = true, poseSet = 'physique', stream, keep = ['measurement', 'post'], send = [], wipe = false, seconds, stopAtReview = false }) {
   await tap(page, '#start', `starting a session for ${who}`)
   await identify(page, who)
@@ -436,6 +451,10 @@ console.log(`\npilot end to end\n`)
     // who wants a picture accept a history on a laptop to get it.
     const first = page.locator('.frame-card').first()
     await first.locator('[data-act="send"]').click()
+    // The handler writes to IndexedDB before it repaints, so the attribute
+    // lands a tick after the click returns. Reading straight through the
+    // click is a race that fails about as often as it passes.
+    await first.locator('[data-act="send"][aria-pressed="true"]').waitFor({ timeout: 10_000 })
     const after = await first.evaluate((c) => ({
       send: c.querySelector('[data-act="send"]').getAttribute('aria-pressed'),
       keep: c.querySelector('[data-act="keep"]').getAttribute('aria-pressed'),
@@ -557,7 +576,7 @@ console.log(`\npilot end to end\n`)
     }, who)
     if (!before.frames) throw new Error('nothing was kept, so the deletion proves nothing')
 
-    await page.evaluate(() => window.__pilot.show('dashboard'))
+    await openTab(page, 'data')
     page.once('dialog', (d) => d.accept(who))
     await tap(page, '#forget-member')
     try {
@@ -642,8 +661,7 @@ console.log(`\npilot end to end\n`)
   })
 
   await step('the dashboard stays sealed while the pilot runs', async () => {
-    await page.evaluate(() => window.__pilot.show('dashboard'))
-    await page.waitForTimeout(600)
+    await openTab(page, 'pilot')
     const sealedVisible = await page.locator('#sealed').isVisible()
     const verdictVisible = await page.locator('#verdict').isVisible()
     const rulesVisible = await page.locator('#rules').isVisible()
@@ -657,14 +675,17 @@ console.log(`\npilot end to end\n`)
   })
 
   await step('every dashboard number is marked demo', async () => {
-    const titles = await page.locator('.tile dt').allTextContents()
+    await openTab(page, 'now')
+    const titles = await page.locator('#today-tiles .tile dt').allTextContents()
     const heading = await page.locator('#dash-title').innerText()
-    if (!titles.every((t) => /demo/i.test(t))) throw new Error('a tile is unlabelled')
-    if (!/demo/i.test(heading + (await page.locator('#sealed').innerText()))) throw new Error('the heading is unlabelled')
+    if (!titles.length) throw new Error('no tiles rendered')
+    if (!titles.every((t) => /demo/i.test(t))) throw new Error(`a tile is unlabelled: ${titles.join(' | ')}`)
+    if (!/demo/i.test(heading)) throw new Error(`the heading reads "${heading}"`)
     return `${titles.length} tiles tagged`
   })
 
   await step('it unseals only when both end conditions are met', async () => {
+    await openTab(page, 'pilot')
     const out = await page.evaluate(async () => {
       const DAY = 86400000, now = Date.now()
       const mk = (i, at, key) => ({
@@ -682,7 +703,8 @@ console.log(`\npilot end to end\n`)
       return window.__pilot.verdict()
     })
     const v = await out
-    await page.waitForTimeout(500)
+    // Seeding re-rendered whatever tab was open; make sure it is this one.
+    await openTab(page, 'pilot')
     if (v.sealed) throw new Error('still sealed at 140 sessions over 5 weeks')
     const verdictVisible = await page.locator('#verdict').isVisible()
     if (!verdictVisible) throw new Error('verdict still hidden')
@@ -696,6 +718,7 @@ console.log(`\npilot end to end\n`)
   })
 
   await step('the quality table reads keep rate against resolution', async () => {
+    await openTab(page, 'quality')
     const rows = await page.locator('#quality tr').allTextContents()
     if (!rows.length) throw new Error('no quality rows')
     if (!rows.some((r) => /1080p|4K|720p|low/.test(r))) throw new Error(`rows: ${rows.join(' | ')}`)
@@ -703,6 +726,7 @@ console.log(`\npilot end to end\n`)
   })
 
   await step('CSV marks demo rows and carries the new columns', async () => {
+    await openTab(page, 'data')
     const [download] = await Promise.all([
       page.waitForEvent('download', { timeout: 15000 }),
       page.locator('#export-csv').click(),
