@@ -429,6 +429,102 @@ table.log td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); color
   background: rgba(255,176,46,0.12); border: 1px solid rgba(255,176,46,0.45); color: #ffd79a;
 }
 
+/* ── the operator console ───────────────────────────────────────────────── */
+
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--edge); margin: 18px 0 20px; }
+.tabs button {
+  background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-3);
+  padding: 11px 18px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.tabs button:hover { color: var(--text-2); }
+.tabs button[aria-selected='true'] { color: var(--text); border-bottom-color: var(--go); }
+.tabpane[hidden] { display: none; }
+.tabpane h3 { font-size: 15px; margin: 26px 0 8px; letter-spacing: 0.01em; }
+.tabpane h3:first-child { margin-top: 0; }
+.tabpane h4 { font-size: 13px; margin: 0 0 8px; color: var(--text-2); font-weight: 600; }
+
+/* ── readiness ──────────────────────────────────────────────────────────── */
+
+.ready-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.ready-head h3 { margin: 0; }
+.ready-pill {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 5px 11px; border-radius: 99px;
+}
+.ready-pill.pass { background: rgba(61,220,132,0.15); color: var(--go); }
+.ready-pill.warn { background: rgba(245,165,36,0.15); color: var(--warn); }
+.ready-pill.fail { background: rgba(255,77,87,0.15); color: var(--stop); }
+
+.checks { display: grid; gap: 1px; background: var(--hair); border: 1px solid var(--hair); border-radius: var(--r); overflow: hidden; }
+.check { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding: 12px 14px; background: var(--surface); align-items: start; }
+.check i { font-style: normal; font-size: 14px; line-height: 1.5; }
+.check.pass i { color: var(--go); }
+.check.warn i { color: var(--warn); }
+.check.fail i { color: var(--stop); }
+.check b { font-size: 14px; font-weight: 600; display: block; }
+.check span { font-size: 13px; color: var(--text-2); }
+.check em { display: block; font-style: normal; font-size: 13px; color: var(--text-3); margin-top: 4px; }
+
+/* ── the last session, and notes ────────────────────────────────────────── */
+
+.lastcard { background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r); padding: 15px 17px; font-size: 14px; color: var(--text-2); }
+.lastcard b { color: var(--text); }
+#day-note {
+  width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--edge);
+  border-radius: var(--r); padding: 12px 14px; font: inherit; font-size: 14px; resize: vertical;
+}
+
+/* ── charts ─────────────────────────────────────────────────────────────── */
+
+.ch { position: relative; margin: 6px 0 4px; padding-right: 54px; }
+.ch svg { width: 100%; display: block; overflow: visible; }
+.ch-hit { fill: transparent; }
+.ch-bar { cursor: default; }
+.ch-bar:hover path, .ch-bar:focus path { fill: var(--info); }
+.ch-bar:focus { outline: none; }
+.ch-x { position: relative; height: 16px; margin-top: 13px; }
+.ch-xlab { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--text-3); white-space: nowrap; }
+.ch-peak { position: absolute; top: -16px; right: 0; font-size: 11px; color: var(--text-3); }
+.ch-y { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+.ch-plot { position: relative; }
+/* Direct labels rather than end-point markers: a circle in a stretched
+   viewBox renders as an ellipse, and a value the reader can see beats a
+   legend they have to cross-reference. */
+.ch-end {
+  position: absolute; right: 0; transform: translate(calc(100% + 7px), -50%);
+  font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ch-rule {
+  position: absolute; right: 0; transform: translateY(-125%);
+  font-size: 11px; color: var(--warn); white-space: nowrap;
+  background: var(--surface); padding: 0 5px; border-radius: 4px;
+}
+/* The bottom of a truncated axis, stated on the chart rather than only in
+   the caption — a reader who skips the caption must still not be misled. */
+.ch-floor { position: absolute; left: 0; bottom: -4px; font-size: 11px; color: var(--text-3); }
+.ch-legend { display: flex; gap: 16px; margin-bottom: 8px; font-size: 12.5px; color: var(--text-2); }
+.ch-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+/* ── the funnel ─────────────────────────────────────────────────────────── */
+
+.fn { display: grid; gap: 7px; }
+.fn-row { display: grid; grid-template-columns: 150px 1fr 46px 42px; gap: 11px; align-items: center; font-size: 13.5px; }
+.fn-label { color: var(--text-2); }
+.fn-track { height: 20px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden; }
+.fn-track i { display: block; height: 100%; background: rgba(57,135,229,0.65); border-radius: 5px; }
+.fn-row.worst .fn-track i { background: var(--warn); }
+.fn-row.worst .fn-lost { color: var(--warn); font-weight: 700; }
+.fn-value { font-variant-numeric: tabular-nums; font-weight: 600; }
+.fn-lost { font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--text-3); }
+
+/* ── a small ordinal split ──────────────────────────────────────────────── */
+
+.sb-track { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: rgba(255,255,255,0.05); gap: 2px; }
+.sb-track i { display: block; }
+.sb-key { display: flex; gap: 16px; margin-top: 9px; font-size: 13px; color: var(--text-2); }
+.sb-key i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.splits { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 26px; }
+
 /* ── sealed dashboard ────────────────────────────────────────────────────── */
 
 .sealed {
@@ -796,13 +892,13 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
     <div class="pad row"><button class="btn btn-ghost btn-block" id="done-skip">Finish</button></div>
   </section>
 
-  <!-- ── dashboard ── -->
+  <!-- ── the operator console ── -->
   <section class="screen" data-id="dashboard">
     <div class="pad dash grow">
       <div class="dash-head">
         <div>
           <span class="brandline"><b>PODIUM</b> pilot · <span id="dash-venue"></span></span>
-          <h2 style="margin-top:6px" id="dash-title">Pilot dashboard</h2>
+          <h2 style="margin-top:6px" id="dash-title">Operator</h2>
         </div>
         <div class="row tight">
           <div class="queue" title="People waiting right now — logged with the next session">
@@ -810,41 +906,107 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
             <span class="tiny">queue</span>
           </div>
           <label class="optoggle"><input type="checkbox" id="operator-present" /><span>Operator present</span></label>
-          <button class="btn btn-ghost" id="forget-member">Delete a member</button>
-          <button class="btn btn-ghost" id="export-csv">Export CSV</button>
-          <button class="btn btn-go" id="start-pilot">Start real pilot</button>
           <button class="btn btn-ghost" id="close-dash">Close</button>
         </div>
       </div>
 
-      <div class="sealed" id="sealed"></div>
-      <div class="verdict" id="verdict" hidden></div>
-      <dl class="tiles" id="tiles"></dl>
-      <div class="rules" id="rules" hidden></div>
+      <div class="tabs" role="tablist" id="dash-tabs">
+        <button role="tab" data-tab="now" aria-selected="true">Now</button>
+        <button role="tab" data-tab="quality" aria-selected="false">Quality</button>
+        <button role="tab" data-tab="pilot" aria-selected="false">Pilot</button>
+        <button role="tab" data-tab="data" aria-selected="false">Data</button>
+      </div>
 
-      <h2 style="font-size:16px;margin:22px 0 10px">Live — where people get to, and what broke</h2>
-      <p class="tiny" style="margin:-4px 0 10px">Counts, not verdicts. These stay visible while the pilot runs, because
-      a member who leaves at the consent screen writes no session row and is otherwise invisible.</p>
-      <dl class="tiles" id="funnel"></dl>
+      <!-- ── Now: the shift ── -->
+      <div class="tabpane" data-pane="now">
+        <div class="ready-head">
+          <h3 id="ready-title">Readiness</h3>
+          <span class="ready-pill" id="ready-pill"></span>
+        </div>
+        <div class="checks" id="checks"></div>
 
-      <h2 style="font-size:16px;margin:22px 0 10px">Image quality and what the model could see</h2>
-      <table class="quality"><thead><tr>
-        <th>Resolution</th><th>Sessions</th><th>Keep rate</th><th>Mean confidence</th>
-      </tr></thead><tbody id="quality"></tbody></table>
+        <h3>Today</h3>
+        <dl class="tiles" id="today-tiles"></dl>
 
-      <h2 style="font-size:16px;margin:22px 0 10px">Sessions</h2>
-      <table class="log"><thead><tr>
-        <th>When</th><th>Who</th><th>People</th><th>Kept</th><th>Shared</th><th>Mins</th><th>Queue</th><th>Outcome</th>
-      </tr></thead><tbody id="log"></tbody></table>
+        <h3>The last session</h3>
+        <div class="lastcard" id="last-session"></div>
 
-      <p class="tiny" style="margin-top:22px" id="dash-foot"></p>
+        <h3>Notes</h3>
+        <p class="tiny">What a member said, why someone walked away, what the light was doing. The
+        dashboard cannot see any of it, and it is usually where the real finding is.</p>
+        <textarea id="day-note" rows="4" placeholder="Today, in your own words…"></textarea>
+        <div class="row" style="margin-top:8px"><button class="btn btn-ghost" id="save-note">Save note</button><span class="tiny" id="note-saved"></span></div>
+      </div>
+
+      <!-- ── Quality: is the output any good ── -->
+      <div class="tabpane" data-pane="quality" hidden>
+        <h3>Are the progress shots comparable?</h3>
+        <p class="tiny">The question keep rate cannot answer. Measured on the frame actually captured,
+        against the frame it will actually be compared with. Returning members only — a first visit
+        had nothing to line up against.</p>
+        <dl class="tiles" id="comp-tiles"></dl>
+
+        <h3>What the model could see, by day</h3>
+        <p class="tiny">The lighting check, over time. A drift downwards is the room changing, not the people.</p>
+        <div id="conf-chart"></div>
+
+        <h3>Keep rate against image quality</h3>
+        <table class="quality"><thead><tr>
+          <th>Resolution</th><th>Sessions</th><th>Keep rate</th><th>Mean confidence</th>
+        </tr></thead><tbody id="quality"></tbody></table>
+
+        <h3>What broke</h3>
+        <dl class="tiles" id="fail-tiles"></dl>
+      </div>
+
+      <!-- ── Pilot: the research ── -->
+      <div class="tabpane" data-pane="pilot" hidden>
+        <div class="sealed" id="sealed"></div>
+        <div class="verdict" id="verdict" hidden></div>
+        <dl class="tiles" id="tiles"></dl>
+        <div class="rules" id="rules" hidden></div>
+
+        <h3>Where people stop</h3>
+        <p class="tiny">Counts, not verdicts. A member who leaves at the consent screen writes no
+        session row and is invisible everywhere else.</p>
+        <div id="funnel-chart"></div>
+        <p class="tiny" id="funnel-note"></p>
+
+        <h3>Sessions a day</h3>
+        <div id="daily-chart"></div>
+
+        <h3>Keep and send, as they accumulate</h3>
+        <p class="tiny">Cumulative, not daily. At four sessions a day a daily rate swings on one
+        person's mood, and a chart of that noise looks exactly like a trend.</p>
+        <div id="rates-chart"></div>
+
+        <h3>When people come</h3>
+        <div id="hours-chart"></div>
+        <p class="tiny" id="pods-note"></p>
+
+        <h3>Which set, and who is coming back</h3>
+        <div class="splits">
+          <div><h4>Pose set</h4><div id="poseset-split"></div></div>
+          <div><h4>Back in 4 weeks?</h4><div id="intent-split"></div></div>
+        </div>
+      </div>
+
+      <!-- ── Data: the rows, and the dangerous buttons ── -->
+      <div class="tabpane" data-pane="data" hidden>
+        <div class="row" style="margin-bottom:14px">
+          <button class="btn btn-ghost" id="export-csv">Export CSV</button>
+          <button class="btn btn-ghost" id="export-report">Export write-up</button>
+          <button class="btn btn-ghost" id="forget-member">Delete a member</button>
+          <button class="btn btn-go" id="start-pilot">Start real pilot</button>
+        </div>
+        <h3>Sessions</h3>
+        <table class="log"><thead><tr>
+          <th>When</th><th>Who</th><th>Set</th><th>Kept</th><th>Sent</th><th>Align</th><th>Mins</th><th>Queue</th><th>Back?</th><th>Outcome</th>
+        </tr></thead><tbody id="log"></tbody></table>
+        <p class="tiny" style="margin-top:22px" id="dash-foot"></p>
+      </div>
     </div>
   </section>
-
-  <div class="preroll" id="preroll" hidden>
-    <div class="preroll-line">Stand on the tape mark.<br/>Shirt on or off — your call.</div>
-    <div class="preroll-count mono" id="preroll-count">5</div>
-  </div>
 
   <div class="banner" id="banner" hidden></div>
 

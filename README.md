@@ -33,7 +33,7 @@ Three documents matter more than the code:
 | **Compare** | Returning members who kept a comparison frame see then and now — side by side by default, with a slide-across view on request. Side by side leads because it shows both bodies at once; the wipe looks better and shows half as much. |
 | **Walk away** | Every member-facing screen clears itself after a period of no touching, with a warning first. A review screen left unattended deletes its photographs rather than leaving them for the midnight sweep, and the session is logged `abandoned` so it never counts against keep rate. Capture and the operator screen are exempt: holding still is the task, and the operator is standing there. |
 | **Forget me** | A member can have everything of theirs deleted on the spot, from the screen they are holding or by the operator a week later. Photographs, outline and identifier go; the image-free session row stays, stripped of its key. |
-| **Operator** | The dashboard, fed by real sessions. **Sealed while the pilot runs** — raw counts only, no verdicts — and it unseals itself when both end conditions in `DECISIONS.md` are met. Also where the camera's resolution and the model's mean confidence are read against keep rate. |
+| **Operator** | A four-tab console — **Now** (readiness, today, the last session, your notes), **Quality** (are the progress shots comparable, what the model could see, what broke), **Pilot** (the funnel, demand, the sealed verdict) and **Data** (the rows, the CSV, the generated write-up). Fed by real sessions. **Sealed while the pilot runs** — raw counts only, no verdicts — and it unseals itself when both end conditions in `DECISIONS.md` are met. Also where the camera's resolution and the model's mean confidence are read against keep rate. |
 
 ## Demo data, and the gate
 
@@ -79,6 +79,10 @@ tools/              clip generation, scoring tests, end-to-end verification
 node tools/test-scoring.mjs    # the pose templates, against synthetic skeletons
 node tools/test-align.mjs      # the alignment maths — distance, drift, rotation, the hold
 node tools/test-mirror.mjs     # the same maths reaching the screen, in a real browser
+node tools/test-report.mjs     # the console's arithmetic — daily counts, rates, pods, splits
+node tools/test-readiness.mjs  # the preflight checks and the pre-registration lock
+node tools/test-writeup.mjs    # the generated write-up, and its confidence intervals
+node tools/test-console.mjs    # the whole console in a browser, with a pilot's worth of data
 node tools/make-clips.mjs      # renders the fake-camera clips (writes to /tmp)
 node tools/verify.mjs          # 27 steps, end to end, no camera and no person
 ```

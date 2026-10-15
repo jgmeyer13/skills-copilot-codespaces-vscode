@@ -279,7 +279,13 @@ export async function wipeDemo() {
  * survives the wipe, so "the pilot started" can never be true while fixture
  * rows are still in the dashboard.
  */
-export async function startRealPilot() {
+/**
+ * @param rulesFingerprint a stamp of the decision thresholds as they stood
+ *   when the pilot began. DECISIONS.md says moving a threshold after the data
+ *   arrives is how a pilot becomes a press release; this is what lets the
+ *   console notice that it happened.
+ */
+export async function startRealPilot(rulesFingerprint = null) {
   const wiped = await wipeDemo()
   // The funnel counted every rehearsal too. Starting the real pilot has to
   // zero them, or week one opens with a drop-off chart built from testing.
@@ -288,6 +294,7 @@ export async function startRealPilot() {
   if (left) throw new Error(`${left} demo session(s) survived the wipe — not starting`)
   const at = Date.now()
   await setMeta('pilotStartedAt', at)
+  if (rulesFingerprint) await setMeta('rulesAtStart', rulesFingerprint)
   return { ...wiped, startedAt: at }
 }
 
@@ -316,6 +323,11 @@ export async function counters() {
   const out = {}
   for (const r of rows) if (String(r.key).startsWith('count:')) out[String(r.key).slice(6)] = r.value
   return out
+}
+
+/** Every meta row, for the console's notes and the write-up. */
+export async function allMeta() {
+  return all('meta')
 }
 
 export async function resetCounters() {
@@ -348,7 +360,9 @@ export async function purge({ retentionDays }) {
     f.kept ? f.createdAt < keptCutoff : f.createdAt < startOfToday.getTime(),
   )
   await Promise.all(doomed.map((f) => del('frames', f.id)))
-  return { deleted: doomed.length, remaining: rows.length - doomed.length }
+  // `at` so the console can say when the sweep last ran. A deletion promise
+  // nobody can see evidence of is just a sentence.
+  return { deleted: doomed.length, remaining: rows.length - doomed.length, at: now }
 }
 
 /** Used by the verification run and by the operator's "reset the day" control. */
