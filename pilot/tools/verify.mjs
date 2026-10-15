@@ -178,7 +178,7 @@ async function openTab(page, name) {
   await page.waitForTimeout(250)
 }
 
-async function runSession(page, { who, people = 1, keepHistory = true, poseSet = 'physique', stream, keep = ['measurement', 'post'], send = [], wipe = false, seconds, stopAtReview = false }) {
+async function runSession(page, { who, people = 1, keepHistory = true, poseSet = 'physique', stream, keep = ['measurement', 'post'], send = [], wipe = false, seconds, stopAtReview = false, leaveCompare = false }) {
   await tap(page, '#start', `starting a session for ${who}`)
   await identify(page, who)
   // One button now. Keeping a history is no longer consented to up front —
@@ -218,7 +218,10 @@ async function runSession(page, { who, people = 1, keepHistory = true, poseSet =
     null,
     { timeout: 20_000 },
   )
-  if (await page.locator('#compare-done').isVisible()) {
+  // A returning member who kept a progress shot lands on then-and-now. Most
+  // callers want it out of the way; the step that tests that screen needs it
+  // left alone, or the helper dismisses the very thing under test.
+  if (!leaveCompare && (await page.locator('#compare-done').isVisible())) {
     await page.locator('#compare-done').click()
     await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'attract', null, { timeout: 20_000 })
   }
@@ -505,7 +508,7 @@ console.log(`\npilot end to end\n`)
     // less. Side by side has to be what a returning member meets first.
     const who = '0825550777'
     await runSession(page, { who, stream: streamFor(1, SHORT), seconds: 6, keep: ['measurement'] })
-    await runSession(page, { who, stream: streamFor(1, SHORT), seconds: 6, keep: ['measurement'] })
+    await runSession(page, { who, stream: streamFor(1, SHORT), seconds: 6, keep: ['measurement'], leaveCompare: true })
     await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'compare', null, { timeout: 20_000 })
 
     if (!(await page.locator('#compare').isVisible())) throw new Error('side by side is not the default')
