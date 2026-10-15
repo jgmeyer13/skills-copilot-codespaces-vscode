@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Podium Pilot</title>
+<!-- Inline so the page needs no second request and the tab is recognisable on
+     a bookmark bar: the camera ring, in the brand green. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2307090c'/%3E%3Ccircle cx='16' cy='14' r='6' fill='none' stroke='%233ddc84' stroke-width='3'/%3E%3Cpath d='M9 26h14' stroke='%233ddc84' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E" />
+
+<style>
+/*
+ * PODIUM — pilot capture app
+ *
+ * This runs on one laptop or tablet on a gym counter, operated by a member who
+ * has never seen it, standing up, possibly sweating, with people waiting. So:
+ * one decision per screen, targets you can hit without looking, text you can
+ * read at arm's length, and no control that does something irreversible
+ * without saying so in the label.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #07090c;
+  --surface: #11161d;
+  --surface-2: #171d26;
+  --edge: rgba(255,255,255,0.1);
+  --hair: rgba(255,255,255,0.07);
+
+  --text: #f2f5f9;
+  --text-2: #9fadbf;
+  --text-3: #6b7a8d;
+
+  --go: #3ddc84;
+  --warn: #f5a524;
+  --stop: #ff4d57;
+  --info: #5aa9ff;
+
+  --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Inter, Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --r: 14px;
+  --r-lg: 22px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+/* The `hidden` attribute loses to any explicit `display` rule, which has now
+   bitten twice — a grid keypad and a flex action row both stayed on screen
+   while the code believed it had hidden them. */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0; height: 100%;
+  background: var(--bg); color: var(--text);
+  font-family: var(--font);
+  overscroll-behavior: none;
+}
+
+body { overflow: hidden; }
+
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--info); outline-offset: 2px; }
+button[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+/* ── screens ─────────────────────────────────────────────────────────────── */
+
+#app { position: fixed; inset: 0; display: flex; flex-direction: column; }
+.screen { display: none; flex: 1; min-height: 0; flex-direction: column; }
+#app[data-screen='attract']  .screen[data-id='attract'],
+#app[data-screen='checkin']  .screen[data-id='checkin'],
+#app[data-screen='consent']  .screen[data-id='consent'],
+#app[data-screen='ready']    .screen[data-id='ready'],
+#app[data-screen='capture']  .screen[data-id='capture'],
+#app[data-screen='review']   .screen[data-id='review'],
+#app[data-screen='compare']  .screen[data-id='compare'],
+#app[data-screen='dashboard'].screen[data-id='dashboard'],
+#app[data-screen='dashboard'] .screen[data-id='dashboard'] { display: flex; }
+
+.pad { padding: clamp(18px, 4vw, 40px); }
+.grow { flex: 1; min-height: 0; }
+.center { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+
+h1 { font-size: clamp(30px, 6vw, 56px); margin: 0 0 10px; letter-spacing: -0.02em; line-height: 1.05; }
+h2 { font-size: clamp(20px, 3.4vw, 28px); margin: 0 0 8px; letter-spacing: -0.01em; }
+p  { margin: 0 0 12px; color: var(--text-2); line-height: 1.6; font-size: clamp(14px, 1.8vw, 17px); }
+.lead { font-size: clamp(16px, 2.2vw, 20px); color: var(--text-2); }
+.tiny { font-size: 13px; color: var(--text-3); }
+
+.brandline { display: flex; align-items: center; gap: 10px; font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-3); }
+.brandline b { color: var(--go); font-weight: 700; letter-spacing: 0.2em; }
+
+/* ── buttons ─────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 60px; padding: 0 28px; border-radius: var(--r);
+  background: var(--surface-2); border: 1px solid var(--edge);
+  font-size: 17px; font-weight: 600;
+}
+.btn:hover { background: #1d242f; }
+.btn-go { background: var(--go); color: #042a14; border-color: var(--go); }
+.btn-go:hover { filter: brightness(1.07); background: var(--go); }
+.btn-stop { background: rgba(255,77,87,0.12); border-color: rgba(255,77,87,0.45); color: #ffc2c6; }
+.btn-ghost { background: none; border-color: var(--hair); color: var(--text-2); }
+.btn-xl { min-height: 76px; font-size: 21px; padding: 0 38px; }
+.btn-block { width: 100%; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; }
+.row.tight { gap: 8px; }
+
+/* ── attract ─────────────────────────────────────────────────────────────── */
+
+.attract-mark { font-size: clamp(44px, 11vw, 104px); font-weight: 700; letter-spacing: 0.1em; margin-bottom: 6px; }
+.attract-mark i { font-style: normal; color: var(--go); }
+.price { margin-top: 26px; font-size: 15px; color: var(--text-3); }
+.price b { color: var(--text); font-size: 19px; }
+
+/* ── keypad ──────────────────────────────────────────────────────────────── */
+
+.phone-display {
+  font-family: var(--mono); font-size: clamp(26px, 5vw, 42px); letter-spacing: 0.06em;
+  min-height: 60px; display: flex; align-items: center; justify-content: center;
+  border-bottom: 2px solid var(--edge); margin: 0 auto 22px; width: min(420px, 90%);
+}
+.phone-display.empty { color: var(--text-3); }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: min(380px, 92%); margin: 0 auto; }
+.keypad button {
+  min-height: 64px; border-radius: var(--r); background: var(--surface);
+  border: 1px solid var(--hair); font-size: 25px; font-weight: 600;
+}
+.keypad button:active { background: var(--surface-2); }
+
+/* ── consent ─────────────────────────────────────────────────────────────── */
+
+.consent-scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 0 clamp(18px,4vw,40px); }
+.consent-card { background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r); padding: 18px 20px; margin-bottom: 12px; }
+.consent-card h3 { margin: 0 0 8px; font-size: 17px; }
+.consent-card ul { margin: 0 0 4px; padding-left: 20px; }
+.consent-card li { color: var(--text-2); line-height: 1.6; margin-bottom: 5px; font-size: 15px; }
+.consent-card p:last-child { margin-bottom: 0; }
+
+.ticks { padding: 16px clamp(18px,4vw,40px) 0; border-top: 1px solid var(--hair); background: var(--bg); }
+.tick {
+  display: flex; align-items: flex-start; gap: 14px; padding: 14px 16px; margin-bottom: 8px;
+  background: var(--surface); border: 1px solid var(--edge); border-radius: var(--r); cursor: pointer;
+}
+.tick input { width: 26px; height: 26px; flex: 0 0 auto; accent-color: var(--go); margin: 0; }
+.tick span { font-size: 16px; line-height: 1.45; }
+.tick small { display: block; color: var(--text-3); font-size: 13px; margin-top: 3px; }
+.tick.optional { border-style: dashed; }
+
+/* ── camera ──────────────────────────────────────────────────────────────── */
+
+.stage { position: relative; flex: 1; min-height: 0; background: #000; overflow: hidden; }
+#cam, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+#cam { object-fit: cover; transform: scaleX(-1); }
+#overlay { pointer-events: none; }
+
+.cue {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 22px clamp(18px,4vw,40px) 26px;
+  background: linear-gradient(0deg, rgba(5,7,10,0.94), rgba(5,7,10,0));
+  text-align: center;
+}
+.cue-title { font-size: clamp(24px, 4.6vw, 42px); font-weight: 700; letter-spacing: -0.01em; }
+.cue-text { font-size: clamp(14px, 2vw, 19px); color: var(--text-2); margin-top: 6px; }
+.cue-count { font-size: clamp(40px, 9vw, 86px); font-weight: 300; line-height: 1; margin-top: 4px; }
+
+.steps { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 7px; }
+.steps i { width: 36px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.22); }
+.steps i.done { background: var(--go); }
+.steps i.now { background: var(--stop); }
+
+.badge {
+  position: absolute; top: 16px; right: 16px; display: flex; align-items: center; gap: 7px;
+  background: rgba(5,7,10,0.72); border: 1px solid var(--edge); border-radius: 999px;
+  padding: 7px 13px; font-size: 13px; color: var(--text-2);
+}
+.badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--stop); }
+.badge.good .dot { background: var(--go); }
+
+.topleft { position: absolute; top: 16px; left: 16px; display: flex; gap: 8px; }
+
+.people-pick { display: flex; gap: 10px; justify-content: center; }
+.people-pick button { min-width: 84px; min-height: 60px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--edge); font-size: 17px; font-weight: 600; }
+.people-pick button[aria-pressed='true'] { background: var(--go); color: #042a14; border-color: var(--go); }
+
+/* ── review ──────────────────────────────────────────────────────────────── */
+
+.frames { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; overflow-y: auto; }
+.frame-card { background: var(--surface); border: 2px solid var(--hair); border-radius: var(--r); overflow: hidden; display: flex; flex-direction: column; }
+.frame-card.kept { border-color: var(--go); }
+.frame-card img { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; background: #000; }
+.frame-meta { padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.frame-meta b { font-size: 14px; }
+.frame-kind { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-3); }
+.frame-card.measurement .frame-kind { color: var(--info); }
+.frame-toggle { width: 100%; padding: 11px; border-top: 1px solid var(--hair); font-size: 14px; font-weight: 600; color: var(--text-2); }
+.frame-card.kept .frame-toggle { color: var(--go); }
+
+/* ── compare ─────────────────────────────────────────────────────────────── */
+
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 760px; margin: 0 auto; width: 100%; }
+.compare figure { margin: 0; }
+.compare img { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: var(--r); border: 1px solid var(--hair); background: #000; }
+.compare figcaption { display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; color: var(--text-3); }
+
+/* ── dashboard ───────────────────────────────────────────────────────────── */
+
+.dash { overflow-y: auto; }
+.dash-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.tile { background: var(--surface); border: 1px solid var(--edge); border-left: 3px solid var(--info); border-radius: var(--r); padding: 12px 14px; }
+.tile dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-3); margin-bottom: 4px; }
+.tile dd { margin: 0; font-size: 27px; font-weight: 650; letter-spacing: -0.02em; }
+.tile small { display: block; font-size: 12px; color: var(--text-3); font-weight: 400; margin-top: 3px; }
+
+.rules { background: var(--surface); border: 1px solid var(--edge); border-radius: var(--r); overflow: hidden; margin-bottom: 18px; }
+.rule { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center; padding: 13px 16px; border-bottom: 1px solid var(--hair); }
+.rule:last-child { border-bottom: 0; }
+.rule b { font-size: 15px; font-weight: 600; }
+.rule small { display: block; color: var(--text-3); font-size: 12px; margin-top: 2px; }
+.rule .val { font-family: var(--mono); font-size: 19px; }
+.pill { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; padding: 5px 11px; border-radius: 999px; font-weight: 700; }
+.pill.go { background: rgba(61,220,132,0.16); color: var(--go); }
+.pill.weak { background: rgba(245,165,36,0.16); color: var(--warn); }
+.pill.no { background: rgba(255,77,87,0.16); color: var(--stop); }
+.pill.pending { background: rgba(255,255,255,0.08); color: var(--text-3); }
+
+.verdict { padding: 16px 18px; border-radius: var(--r); border: 1px solid var(--edge); background: var(--surface); margin-bottom: 18px; }
+.verdict h3 { margin: 0 0 6px; font-size: 17px; }
+
+table.log { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.log th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); padding: 0 10px 8px 0; }
+table.log td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); color: var(--text-2); white-space: nowrap; }
+
+.queue { display: flex; align-items: center; gap: 8px; }
+.queue button { width: 42px; height: 42px; border-radius: 10px; background: var(--surface); border: 1px solid var(--edge); font-size: 21px; }
+.queue b { font-family: var(--mono); font-size: 21px; min-width: 28px; text-align: center; }
+
+/* ── demo ribbon ─────────────────────────────────────────────────────────── */
+
+/*
+ * Impossible to miss, on every screen, until the operator starts the real
+ * pilot. A seeded dashboard is indistinguishable from a real one, and a number
+ * that came from a fixture has a way of turning up in a pitch deck later.
+ */
+.demo-ribbon {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: 12px;
+  background: repeating-linear-gradient(135deg, rgba(245,165,36,0.2) 0 12px, rgba(245,165,36,0.1) 12px 24px);
+  border-bottom: 1px solid rgba(245,165,36,0.5);
+  color: #ffd79a; font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 7px 14px; text-align: center;
+}
+.demo-ribbon[hidden] { display: none; }
+.demo-ribbon span { font-weight: 500; letter-spacing: 0.02em; text-transform: none; color: #e7c08a; }
+.demo-tag {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: #0c0a05;
+  background: var(--warn); border-radius: 4px; padding: 2px 6px; vertical-align: 2px; margin-left: 7px;
+}
+
+/* ── language toggle ─────────────────────────────────────────────────────── */
+
+.langs { display: flex; gap: 6px; }
+.langs button {
+  font-size: 13px; padding: 7px 14px; border-radius: 9px;
+  border: 1px solid var(--edge); color: var(--text-3);
+}
+.langs button[aria-pressed='true'] { background: var(--surface-2); color: var(--text); }
+
+/* ── camera picker ───────────────────────────────────────────────────────── */
+
+.camline { display: flex; align-items: center; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+.camline select {
+  background: var(--surface); color: var(--text); border: 1px solid var(--edge);
+  border-radius: 10px; padding: 9px 12px; font: inherit; font-size: 14px; max-width: 52vw;
+}
+.camline .res { font-family: var(--mono); font-size: 13px; color: var(--text-3); }
+
+/* ── code check-in ───────────────────────────────────────────────────────── */
+
+#code-panel { width: min(420px, 92%); margin: 0 auto; }
+#code-input {
+  width: 100%; text-align: center; font-family: var(--mono); font-size: clamp(26px, 5vw, 40px);
+  letter-spacing: 0.16em; text-transform: uppercase; padding: 14px 10px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--edge); border-radius: var(--r);
+}
+.code-out { font-family: var(--mono); font-size: clamp(28px, 6vw, 46px); letter-spacing: 0.18em; color: var(--go); }
+
+/* ── sealed dashboard ────────────────────────────────────────────────────── */
+
+.sealed {
+  border: 1px dashed rgba(255,255,255,0.22); border-radius: var(--r);
+  padding: 16px 18px; margin-bottom: 18px; background: rgba(255,255,255,0.025);
+}
+.sealed h3 { margin: 0 0 6px; font-size: 16px; }
+.sealed .bars { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
+.sealed .bar { flex: 1 1 200px; }
+.sealed .bar span { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-3); margin-bottom: 5px; }
+.sealed .track { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; }
+.sealed .track i { display: block; height: 100%; background: var(--info); }
+
+table.quality { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 18px; }
+table.quality th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); padding: 0 10px 8px 0; }
+table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); color: var(--text-2); }
+
+/* ── toast / banner ──────────────────────────────────────────────────────── */
+
+.banner {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+  background: var(--surface-2); border: 1px solid var(--edge); border-radius: 999px;
+  padding: 12px 22px; font-size: 15px; z-index: 50; box-shadow: 0 12px 34px rgba(0,0,0,0.5);
+  max-width: 90vw; text-align: center;
+}
+.banner[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+
+<body>
+<div id="app" data-screen="attract">
+
+  <div class="demo-ribbon" id="demo-ribbon">
+    Demo data
+    <span id="demo-ribbon-text">Nothing here is real. Start the real pilot from the operator screen.</span>
+  </div>
+
+  <!-- ── attract ── -->
+  <section class="screen" data-id="attract">
+    <div class="grow center pad">
+      <div class="attract-mark">PODIUM<i>.</i></div>
+      <p class="lead" id="attract-venue"></p>
+      <button class="btn btn-go btn-xl" id="start" style="margin-top:28px">Take your photos</button>
+      <div class="price" id="attract-price"></div>
+    </div>
+    <div class="pad row" style="justify-content:space-between;align-items:center">
+      <span class="brandline"><b>Pilot</b> <span id="attract-count"></span></span>
+      <button class="btn btn-ghost" id="to-dashboard">Operator</button>
+    </div>
+  </section>
+
+  <!-- ── check-in ── -->
+  <section class="screen" data-id="checkin">
+    <div class="grow center pad">
+      <h1 id="checkin-title">Your number</h1>
+      <p class="lead" style="max-width:36ch" id="checkin-sub"></p>
+      <div class="phone-display empty mono" id="phone">0__ ___ ____</div>
+      <div class="keypad" id="keypad"></div>
+
+      <div id="code-panel" hidden>
+        <input id="code-input" placeholder="ABC-234" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Your member code" />
+        <button class="btn btn-ghost btn-block" id="code-new" style="margin-top:12px">I'm new — give me a code</button>
+      </div>
+    </div>
+    <div class="pad row">
+      <button class="btn btn-ghost" data-back>Back</button>
+      <button class="btn btn-go grow" id="phone-next" disabled>Continue</button>
+    </div>
+  </section>
+
+  <!-- ── consent ── -->
+  <section class="screen" data-id="consent">
+    <div class="pad" style="padding-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+      <h2 id="consent-title">Before we record anything</h2>
+      <div class="langs" id="langs" role="group" aria-label="Language"></div>
+    </div>
+    <div class="consent-scroll" id="consent-body"></div>
+    <div class="ticks">
+      <label class="tick"><input type="checkbox" id="tick-age" /><span id="tick-age-label">I am 18 or older.</span></label>
+      <label class="tick"><input type="checkbox" id="tick-record" /><span>I agree to the 30-second recording.</span></label>
+      <label class="tick optional"><input type="checkbox" id="tick-keep" /><span id="tick-keep-label">Keep my photos on this laptop so I can see them next visit.<small>Optional. Leave this off and you still get your photos to take away.</small></span></label>
+    </div>
+    <div class="pad row">
+      <button class="btn btn-ghost" data-back>Back</button>
+      <button class="btn btn-go grow" id="consent-next" disabled>I agree — continue</button>
+    </div>
+  </section>
+
+  <!-- ── ready ── -->
+  <section class="screen" data-id="ready">
+    <div class="stage">
+      <video id="cam" autoplay playsinline muted></video>
+      <canvas id="overlay"></canvas>
+      <div class="topleft"><button class="btn btn-ghost" data-back style="min-height:44px;padding:0 16px">Back</button></div>
+      <div class="badge" id="ready-badge"><span class="dot"></span><span id="ready-badge-text">Looking for you…</span></div>
+      <div class="cue">
+        <div class="cue-title">Stand on the mark</div>
+        <div class="cue-text" id="ready-hint">Whole body in frame. The outline shows where you stood last time.</div>
+        <div class="camline">
+          <select id="camera-pick" aria-label="Camera"></select>
+          <span class="res" id="camera-res">—</span>
+        </div>
+        <div style="margin-top:16px" class="people-pick" id="people-pick"></div>
+        <div class="row" style="margin-top:14px;justify-content:center">
+          <button class="btn btn-go btn-xl" id="begin">Start · 30 seconds</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── capture ── -->
+  <section class="screen" data-id="capture">
+    <div class="stage">
+      <video id="cam2" autoplay playsinline muted style="display:none"></video>
+      <canvas id="overlay2" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+      <div class="steps" id="cap-steps"></div>
+      <div class="badge" id="cap-badge"><span class="dot"></span><span id="cap-badge-text">—</span></div>
+      <div class="topleft"><button class="btn btn-stop" id="cap-abort" style="min-height:44px;padding:0 16px">Stop</button></div>
+      <div class="cue">
+        <div class="cue-title" id="cap-title">Get ready</div>
+        <div class="cue-text" id="cap-cue"></div>
+        <div class="cue-count mono" id="cap-count"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── review ── -->
+  <section class="screen" data-id="review">
+    <div class="pad" style="padding-bottom:12px">
+      <h2>Yours to choose</h2>
+      <p id="review-sub">Tap the ones you want. Nothing is saved until you choose.</p>
+      <p id="review-code" hidden style="margin:0">Your code: <b class="code-out" id="review-code-value"></b><br/><span class="tiny">Save it — it is the only way to see these next to your next visit.</span></p>
+    </div>
+    <div class="pad grow" style="padding-top:0"><div class="frames" id="frames"></div></div>
+    <div class="pad row">
+      <button class="btn btn-stop" id="wipe-all">Send &amp; wipe everything</button>
+      <button class="btn grow" id="share">Share / save</button>
+      <button class="btn btn-go grow" id="keep-done">Done</button>
+    </div>
+  </section>
+
+  <!-- ── compare ── -->
+  <section class="screen" data-id="compare">
+    <div class="pad" style="padding-bottom:12px"><h2>Then and now</h2><p id="compare-sub"></p></div>
+    <div class="pad grow"><div class="compare" id="compare"></div></div>
+    <div class="pad row"><button class="btn btn-go btn-block" id="compare-done">Done</button></div>
+  </section>
+
+  <!-- ── dashboard ── -->
+  <section class="screen" data-id="dashboard">
+    <div class="pad dash grow">
+      <div class="dash-head">
+        <div>
+          <span class="brandline"><b>PODIUM</b> pilot · <span id="dash-venue"></span></span>
+          <h2 style="margin-top:6px" id="dash-title">Pilot dashboard</h2>
+        </div>
+        <div class="row tight">
+          <div class="queue" title="People waiting right now — logged with the next session">
+            <button id="q-minus">−</button><b class="mono" id="q-value">0</b><button id="q-plus">+</button>
+            <span class="tiny">queue</span>
+          </div>
+          <button class="btn btn-ghost" id="export-csv">Export CSV</button>
+          <button class="btn btn-go" id="start-pilot">Start real pilot</button>
+          <button class="btn btn-ghost" id="close-dash">Close</button>
+        </div>
+      </div>
+
+      <div class="sealed" id="sealed"></div>
+      <div class="verdict" id="verdict" hidden></div>
+      <dl class="tiles" id="tiles"></dl>
+      <div class="rules" id="rules" hidden></div>
+
+      <h2 style="font-size:16px;margin:22px 0 10px">Image quality and what the model could see</h2>
+      <table class="quality"><thead><tr>
+        <th>Resolution</th><th>Sessions</th><th>Keep rate</th><th>Mean confidence</th>
+      </tr></thead><tbody id="quality"></tbody></table>
+
+      <h2 style="font-size:16px;margin:22px 0 10px">Sessions</h2>
+      <table class="log"><thead><tr>
+        <th>When</th><th>Who</th><th>People</th><th>Kept</th><th>Shared</th><th>Mins</th><th>Queue</th><th>Outcome</th>
+      </tr></thead><tbody id="log"></tbody></table>
+
+      <p class="tiny" style="margin-top:22px" id="dash-foot"></p>
+    </div>
+  </section>
+
+  <div class="banner" id="banner" hidden></div>
+</div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>
