@@ -38,8 +38,11 @@ const isNumber = (l) => /^\s*\d+\.\s/.test(l)
 // line of the paragraph under it.
 const isLeadIn = (l) => /^\*\*[^*]+\*\*$/.test(l.trim())
 const isFence = (l) => /^```/.test(l.trim())
+// A worksheet is a stack of pages, not a river of text: a drawing sheet that
+// starts two thirds of the way down one page is a drawing sheet nobody uses.
+const isBreak = (l) => l.trim() === '[newpage]'
 const isImage = (l) => /^!\[[^\]]*\]\([^)]+\)$/.test(l.trim())
-const starts = (l) => isHeading(l) || isRule(l) || isTable(l) || isQuote(l) || isBullet(l) || isNumber(l) || isLeadIn(l) || isImage(l)
+const starts = (l) => isHeading(l) || isRule(l) || isTable(l) || isQuote(l) || isBullet(l) || isNumber(l) || isLeadIn(l) || isImage(l) || isBreak(l)
 
 function unwrap(text) {
   const out = []
@@ -110,14 +113,17 @@ function blocks(lines) {
       continue
     }
 
+    if (isBreak(l)) { flushList(); out.push('<div class="newpage"></div>'); i++; continue }
+
     if (isImage(l)) {
       flushList()
       const [, alt, src] = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(l.trim())
       // The HTML is written to a temp file, so a path relative to the markdown
       // would resolve against /tmp and silently render as a broken-image box.
       const href = /^(https?:|file:|data:)/.test(src) ? src : 'file://' + resolve(dirname(src0), src)
+      const cls = /-sheet\.svg$/.test(src) ? ' class="sheet"' : ''
       out.push(
-        `<figure><img src="${esc(href)}"/>${alt ? `<figcaption>${inline(alt)}</figcaption>` : ''}</figure>`,
+        `<figure><img${cls} src="${esc(href)}"/>${alt ? `<figcaption>${inline(alt)}</figcaption>` : ''}</figure>`,
       )
       i++
       continue
@@ -208,7 +214,11 @@ const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(titl
   /* A block to copy, not to read — tinted so it is findable by flicking pages. */
   pre.prompt { background: #fdf8ee; border-color: #e8d9b4; border-left-color: #c8912c; }
   pre.scad, pre.bash { background: #f1f4f7; }
+  .newpage { page-break-before: always; }
   figure { margin: 4pt 0 13pt; text-align: center; page-break-inside: avoid; }
+  /* A drawing sheet is printed and drawn on, so it must not be rescaled to
+     fit a caption: the millimetres on it are the whole point. */
+  figure img.sheet { max-width: none; width: 174mm; border: none; }
   figure img { max-width: 100%; border: 0.5pt solid #c8ced6; border-radius: 2pt; }
   figcaption { font-size: 8.5pt; color: #6b7684; margin-top: 5pt; text-align: left; }
   ul.tasks { list-style: none; padding-left: 2pt; }
