@@ -55,6 +55,10 @@ export function lockPlan(capabilities) {
       ...lock,
       possible,
       modes: Array.isArray(modes) ? modes : null,
+      // Two different things, kept apart: what this setting is FOR, which
+      // never changes, and whether this particular camera can do it. Folding
+      // them into one field made the screen print the same sentence twice.
+      purpose: lock.why,
       why: possible
         ? lock.why
         : !modes

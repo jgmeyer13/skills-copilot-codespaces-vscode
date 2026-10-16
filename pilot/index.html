@@ -463,6 +463,37 @@ table.log td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); color
 .check span { font-size: 13px; color: var(--text-2); }
 .check em { display: block; font-style: normal; font-size: 13px; color: var(--text-3); margin-top: 4px; }
 
+/* ── flip, timeline, card ───────────────────────────────────────────────── */
+
+.flip { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.flip-stack {
+  position: relative; flex: 1; min-height: 0; border-radius: var(--r-lg);
+  overflow: hidden; background: #000; cursor: pointer;
+}
+.flip-stack img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+/* No cross-fade. A fade is a third image that was never taken, and the whole
+   point of this view is that nothing between the two frames has moved. */
+.flip-stack img[data-off] { visibility: hidden; }
+.flip-key {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  background: rgba(7,9,12,0.82); border: 1px solid var(--edge); border-radius: 999px;
+  padding: 7px 15px; font-size: 13px; font-weight: 600; letter-spacing: 0.2px;
+}
+
+.timeline { margin-top: 12px; }
+.timeline-strip { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0 2px; }
+.timeline-strip button {
+  flex: 0 0 auto; width: 62px; padding: 0; border-radius: 10px; overflow: hidden;
+  background: var(--surface-2); border: 2px solid transparent; cursor: pointer;
+  min-height: 0; line-height: 0;
+}
+.timeline-strip button[aria-pressed='true'] { border-color: var(--go); }
+.timeline-strip img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; display: block; }
+.timeline-strip small { display: block; font-size: 10px; color: var(--text-2); padding: 4px 2px; line-height: 1.3; }
+
+.card-preview { background: #000; border-radius: var(--r); overflow: hidden; margin: 12px 0; text-align: center; }
+.card-preview img { max-width: 100%; max-height: 46vh; display: inline-block; }
+
 /* ── rig setup ───────────────────────────────────────────────────────────── */
 
 .setup-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(300px, 420px); gap: 20px; align-items: start; }
@@ -876,6 +907,17 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
     <div class="pad" style="padding-bottom:12px"><h2>Then and now</h2><p id="compare-sub"></p></div>
     <div class="pad grow">
       <div class="compare" id="compare"></div>
+      <div class="flip" id="flip-view" hidden>
+        <div class="flip-stack" id="flip-stack">
+          <img id="flip-then" alt="Your first visit" />
+          <img id="flip-now" alt="Today" />
+          <span class="flip-key" id="flip-key"></span>
+        </div>
+        <p class="tiny" style="text-align:center;margin-top:10px">
+          The same two photographs, in the same place. Differences stop hiding
+          when the body stops moving between them.
+        </p>
+      </div>
       <div class="wipe" id="wipe-view" hidden>
         <div class="wipe-stack" id="wipe-stack">
           <img id="wipe-then" alt="Your first visit" />
@@ -893,9 +935,17 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
       <div class="seg" role="group" aria-label="How to compare">
         <button id="view-side" aria-pressed="true">Side by side</button>
         <button id="view-wipe" aria-pressed="false">Slide across</button>
+        <button id="view-flip" aria-pressed="false">Flip</button>
+      </div>
+      <div class="timeline" id="timeline" hidden>
+        <span class="tiny">Every visit — tap one to compare against it</span>
+        <div class="timeline-strip" id="timeline-strip"></div>
       </div>
     </div>
-    <div class="pad row"><button class="btn btn-go btn-block" id="compare-done">Done</button></div>
+    <div class="pad row">
+      <button class="btn btn-ghost" id="make-card">Make a card</button>
+      <button class="btn btn-go grow" id="compare-done">Done</button>
+    </div>
     <div class="pad" style="padding-top:0">
       <button class="linkbtn" data-forget>Delete everything of mine on this laptop</button>
     </div>
@@ -1094,6 +1144,20 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
   <div class="idle" id="idle-warning" hidden>
     <b>Still there?</b> Touch the screen. This clears itself in a moment so the
     next person does not see your session.
+  </div>
+
+  <!-- ── the card: the one thing a member might actually post ── -->
+  <div class="sheet" id="card-sheet" hidden>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="card-title">
+      <h3 id="card-title">Your card</h3>
+      <p class="tiny">Made on this laptop. It is not sent anywhere — saving it puts it in
+      your downloads, and it is yours to do what you like with.</p>
+      <div class="card-preview"><img id="card-img" alt="Your progress card" /></div>
+      <div class="row">
+        <button class="btn btn-ghost grow" id="card-close">Close</button>
+        <a class="btn btn-go grow" id="card-save" download="podium.jpg">Save it</a>
+      </div>
+    </div>
   </div>
 
   <!-- ── forget me ── -->

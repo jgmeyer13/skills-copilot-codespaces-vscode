@@ -1398,6 +1398,12 @@ async function finishSession(outcome) {
  * were captioned "1 week apart" — which in a product whose whole claim is an
  * honest comparison is not a rounding error.
  */
+/** The same gap as `apart`, without the sentence around it, for the card. */
+function gapLabel(a, b) {
+  const said = apart(a, b)
+  return said === 'taken the same day' ? 'same day' : said.replace(/ apart$/, '')
+}
+
 function apart(a, b) {
   const days = Math.floor((b - a) / 86400000)
   if (days < 1) return 'taken the same day'
@@ -1408,37 +1414,96 @@ function apart(a, b) {
   return `${months} month${months === 1 ? '' : 's'} apart`
 }
 
+/*
+ * Which two frames are on screen. The baseline end is fixed — it is their
+ * first visit, the thing everything is registered onto — and the other end
+ * moves, because a member with six visits wants to look at more pairs than
+ * one. Held outside presentCompare so the timeline can change it without
+ * rebuilding the screen.
+ */
+let compareHistory = []
+let compareIndex = -1
+
 async function presentCompare() {
   const history = (await db.framesForMember(state.memberKey)).filter((f) => f.kind === 'measurement')
   if (history.length < 2) {
     banner('Saved. Next time you will see them side by side.')
     return reset()
   }
-  const first = history[0]
-  const latest = history[history.length - 1]
+  compareHistory = history
+  compareIndex = history.length - 1
+  paintCompare()
+  renderTimeline()
+  setCompareView('side')
+  show('compare')
+}
+
+/** Revoke as we go: a member with a year of visits is a lot of held blobs. */
+let compareUrls = []
+const freshUrl = (blob) => {
+  const url = URL.createObjectURL(blob)
+  compareUrls.push(url)
+  return url
+}
+
+function paintCompare() {
+  for (const url of compareUrls) URL.revokeObjectURL(url)
+  compareUrls = []
+  const first = compareHistory[0]
+  const latest = compareHistory[compareIndex]
   $('compare-sub').textContent = `Same mark, same light, ${apart(first.createdAt, latest.createdAt)}.`
   // The wipe view needs the two images at a stable size; the clip is a
   // percentage of the frame, so both must be laid out identically or the
   // bodies will not line up and the comparison becomes a lie.
-  const thenUrl = URL.createObjectURL(first.blob)
-  const nowUrl = URL.createObjectURL(latest.blob)
+  const thenUrl = freshUrl(first.blob)
+  const nowUrl = freshUrl(latest.blob)
+  const isToday = compareIndex === compareHistory.length - 1
+  const nowLabel = isToday ? 'Today' : `Visit ${compareIndex + 1}`
   $('wipe-then').src = thenUrl
   $('wipe-now').src = nowUrl
-  $('wipe-key-then').textContent = `First visit · ${new Date(first.createdAt).toLocaleDateString('en-ZA')}`
-  $('wipe-key-now').textContent = `Today · ${new Date(latest.createdAt).toLocaleDateString('en-ZA')}`
+  $('flip-then').src = thenUrl
+  $('flip-now').src = nowUrl
+  $('wipe-key-then').textContent = `First visit · ${dayLabel(first.createdAt)}`
+  $('wipe-key-now').textContent = `${nowLabel} · ${dayLabel(latest.createdAt)}`
   setWipe(50)
-  setCompareView('side')
+  setFlip(true)
 
-  $('compare').innerHTML = [first, latest]
+  $('compare').innerHTML = [[first, 'First visit'], [latest, nowLabel]]
     .map(
-      (f, i) => `
+      ([f, label]) => `
       <figure>
-        <img src="${URL.createObjectURL(f.blob)}" alt="" />
-        <figcaption><span>${i === 0 ? 'First visit' : 'Today'}</span><span>${new Date(f.createdAt).toLocaleDateString('en-ZA')}</span></figcaption>
+        <img src="${freshUrl(f.blob)}" alt="" />
+        <figcaption><span>${esc(label)}</span><span>${new Date(f.createdAt).toLocaleDateString('en-ZA')}</span></figcaption>
       </figure>`,
     )
     .join('')
-  show('compare')
+}
+
+/*
+ * Every visit, not just the two ends.
+ *
+ * The first visit is in the strip but cannot be selected — it is the fixed
+ * end of every comparison, and a member who picked it for both sides would
+ * get a photograph compared with itself and a caption saying nothing changed.
+ */
+function renderTimeline() {
+  const strip = $('timeline-strip')
+  $('timeline').hidden = compareHistory.length < 3
+  if (compareHistory.length < 3) return
+  strip.innerHTML = ''
+  compareHistory.forEach((f, i) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.setAttribute('aria-pressed', String(i === compareIndex))
+    b.disabled = i === 0
+    b.innerHTML = `<img src="${freshUrl(f.blob)}" alt="" /><small>${i === 0 ? 'first' : dayLabel(f.createdAt)}</small>`
+    b.addEventListener('click', () => {
+      compareIndex = i
+      paintCompare()
+      for (const other of strip.children) other.setAttribute('aria-pressed', String(other === b))
+    })
+    strip.appendChild(b)
+  })
 }
 /*
  * Two ways to look at the same pair. The wipe is driven by a range input as
@@ -1453,16 +1518,57 @@ function setWipe(pct) {
   if ($('wipe-slider').valueAsNumber !== clamped) $('wipe-slider').value = String(clamped)
 }
 
+/*
+ * The third way of looking, and the one that actually shows small changes.
+ *
+ * Side by side makes the eye travel; a wipe only ever shows half of each
+ * body. Flipping puts the two frames in the same place and swaps between
+ * them, so anything that moved jumps and everything that did not sits still.
+ * It only works because the frames are registered — on two hand-held
+ * photographs it is a strobe light.
+ *
+ * No cross-fade, deliberately. A fade invents an in-between image that was
+ * never taken, and the honesty of this view is that there is nothing between
+ * the two.
+ */
+let flipTimer = 0
+let flipShowingThen = true
+
+function setFlip(showThen) {
+  flipShowingThen = showThen
+  $('flip-then').toggleAttribute('data-off', !showThen)
+  $('flip-now').toggleAttribute('data-off', showThen)
+  const f = compareHistory[0]
+  const l = compareHistory[compareIndex]
+  const which = showThen ? f : l
+  $('flip-key').textContent = which
+    ? `${showThen ? 'First visit' : compareIndex === compareHistory.length - 1 ? 'Today' : `Visit ${compareIndex + 1}`} · ${dayLabel(which.createdAt)}`
+    : ''
+}
+
+function startFlipping() {
+  stopFlipping()
+  // Slow enough to read the label, fast enough that the eye holds both.
+  flipTimer = setInterval(() => setFlip(!flipShowingThen), 1100)
+}
+function stopFlipping() { clearInterval(flipTimer); flipTimer = 0 }
+
+$('flip-stack').addEventListener('click', () => { stopFlipping(); setFlip(!flipShowingThen) })
+
 function setCompareView(which) {
-  const wipe = which === 'wipe'
-  $('compare').hidden = wipe
-  $('wipe-view').hidden = !wipe
-  $('view-side').setAttribute('aria-pressed', String(!wipe))
-  $('view-wipe').setAttribute('aria-pressed', String(wipe))
+  $('compare').hidden = which !== 'side'
+  $('wipe-view').hidden = which !== 'wipe'
+  $('flip-view').hidden = which !== 'flip'
+  for (const [id, name] of [['view-side', 'side'], ['view-wipe', 'wipe'], ['view-flip', 'flip']]) {
+    $(id).setAttribute('aria-pressed', String(which === name))
+  }
+  if (which === 'flip') startFlipping()
+  else stopFlipping()
 }
 
 $('view-side').addEventListener('click', () => setCompareView('side'))
 $('view-wipe').addEventListener('click', () => setCompareView('wipe'))
+$('view-flip').addEventListener('click', () => setCompareView('flip'))
 $('wipe-slider').addEventListener('input', (e) => setWipe(e.target.valueAsNumber))
 
 {
@@ -1483,7 +1589,92 @@ $('wipe-slider').addEventListener('input', (e) => setWipe(e.target.valueAsNumber
   }
 }
 
-$('compare-done').addEventListener('click', () => reset())
+$('compare-done').addEventListener('click', () => { stopFlipping(); reset() })
+
+// ── the card ───────────────────────────────────────────────────────────────
+
+/*
+ * The one artefact of this that might leave the building.
+ *
+ * It is drawn here, on this laptop, from two photographs that are already on
+ * this laptop, and then offered as a download. Nothing is uploaded and there
+ * is nothing to upload it to — which is the same promise the consent screen
+ * makes, kept in the one place a member would most expect it to be broken.
+ *
+ * 4:5 because that is what the capture produces and what a phone shows
+ * without cropping someone's head off.
+ */
+const CARD = { w: 1080, h: 1350, pad: 36, foot: 150 }
+
+async function drawCard(then, now) {
+  const canvas = document.createElement('canvas')
+  canvas.width = CARD.w
+  canvas.height = CARD.h
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#07090c'
+  ctx.fillRect(0, 0, CARD.w, CARD.h)
+
+  const gap = 12
+  const cellW = (CARD.w - CARD.pad * 2 - gap) / 2
+  const cellH = CARD.h - CARD.pad - CARD.foot
+
+  for (const [i, frame] of [then, now].entries()) {
+    const bitmap = await createImageBitmap(frame.blob)
+    try {
+      // Cover, not contain: two letterboxed bodies in a tall card would be
+      // mostly black. The crop is identical on both because the frames are
+      // registered, so the pair stays a fair comparison.
+      const scale = Math.max(cellW / bitmap.width, cellH / bitmap.height)
+      const w = bitmap.width * scale
+      const h = bitmap.height * scale
+      const x = CARD.pad + i * (cellW + gap)
+      ctx.save()
+      ctx.beginPath()
+      ctx.roundRect(x, CARD.pad, cellW, cellH, 18)
+      ctx.clip()
+      ctx.drawImage(bitmap, x + (cellW - w) / 2, CARD.pad + (cellH - h) / 2, w, h)
+      ctx.restore()
+    } finally {
+      bitmap.close?.()
+    }
+  }
+
+  const label = (text, x, align) => {
+    ctx.textAlign = align
+    ctx.fillStyle = 'rgba(242,245,249,0.92)'
+    ctx.font = '600 30px ui-sans-serif, system-ui, sans-serif'
+    ctx.fillText(text, x, CARD.pad + cellH + 52)
+  }
+  label(dayLabel(then.createdAt), CARD.pad, 'left')
+  label(dayLabel(now.createdAt), CARD.w - CARD.pad, 'right')
+
+  ctx.textAlign = 'center'
+  ctx.fillStyle = '#3ddc84'
+  ctx.font = '700 40px ui-sans-serif, system-ui, sans-serif'
+  ctx.fillText(gapLabel(then.createdAt, now.createdAt), CARD.w / 2, CARD.pad + cellH + 54)
+
+  ctx.fillStyle = 'rgba(159,173,191,0.75)'
+  ctx.font = '500 24px ui-sans-serif, system-ui, sans-serif'
+  ctx.fillText(`${config.pilot.venue} · same spot, same light`, CARD.w / 2, CARD.pad + cellH + 104)
+
+  return new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.92))
+}
+
+let cardUrl = null
+$('make-card').addEventListener('click', async () => {
+  const then = compareHistory[0]
+  const now = compareHistory[compareIndex]
+  if (!then || !now) return
+  const blob = await drawCard(then, now)
+  if (!blob) return banner('The card could not be drawn.', 4000)
+  if (cardUrl) URL.revokeObjectURL(cardUrl)
+  cardUrl = URL.createObjectURL(blob)
+  $('card-img').src = cardUrl
+  $('card-save').href = cardUrl
+  $('card-save').download = `podium-${dayLabel(now.createdAt).replace(/\s+/g, '-').toLowerCase()}.jpg`
+  $('card-sheet').hidden = false
+})
+$('card-close').addEventListener('click', () => { $('card-sheet').hidden = true })
 
 
 // ── the rig: the camera, held still ────────────────────────────────────────
@@ -1617,7 +1808,7 @@ function renderLocks(taken) {
       const mark = t.locked ? '●' : t.possible ? '▲' : '○'
       const said = t.locked ? 'locked' : t.possible ? 'would not take' : t.why
       return `<div class="check ${st}"><i>${mark}</i><div><b>${esc(t.label)}</b>
-        <span>${esc(said)}</span><em>${esc(t.why)}</em></div></div>`
+        <span>${esc(said)}</span><em>${esc(t.purpose)}</em></div></div>`
     })
     .join('')
 }
@@ -1644,7 +1835,7 @@ function renderSetupLight() {
 
 async function openSetup() {
   show('setup')
-  $('setup-venue').textContent = config.venue?.name ?? ''
+  $('setup-venue').textContent = `${config.pilot.venue}, ${config.pilot.city}`
   const stage = $('setup-stage')
   stage.insertBefore(video, $('setup-overlay'))
   video.style.display = ''
@@ -2266,6 +2457,9 @@ window.__pilot = {
   async wipe() { await db.wipeEverything(); await refreshPilotState() },
   /** What the review screen is showing, in display order, with hidden kinds. */
   reviewOrder: () => [...document.querySelectorAll('#frames .frame-card')].map((c) => c.dataset.kind),
+  /* Compare needs a member with a history, which otherwise costs two real
+     thirty-second sessions to produce. */
+  presentCompare: () => presentCompare(),
   idleFor: idleMsFor,
   /*
    * The harness turns the watchdog off.
