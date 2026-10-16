@@ -799,8 +799,9 @@ function startPreview() {
     const h = canvas.clientHeight
     if (canvas.width !== w) { canvas.width = w; canvas.height = h }
     ctx.clearRect(0, 0, w, h)
+    const box = videoBox(w, h, video.videoWidth, video.videoHeight)
     drawMark(ctx, w, h)
-    if (state.ghost) drawSkeleton(ctx, state.ghost, w, h, 'rgba(90,169,255,0.5)', 3)
+    if (state.ghost) drawSkeleton(ctx, state.ghost, box, 'rgba(90,169,255,0.5)', 3)
 
     const p = pose()
     if (!p) { startPreview.raf = requestAnimationFrame(loop); return }
@@ -813,7 +814,7 @@ function startPreview() {
       ? people.length === 1 ? 'Got you' : `Got all ${people.length}`
       : people.length === 0 ? 'Step into frame' : `${people.length} of ${state.people} in frame`
 
-    for (const lm of people) drawSkeleton(ctx, lm, w, h, 'rgba(61,220,132,0.78)', 3)
+    for (const lm of people) drawSkeleton(ctx, lm, box, 'rgba(61,220,132,0.78)', 3)
 
     /*
      * Alignment is only meaningful for one body. With three people in shot
@@ -829,7 +830,7 @@ function startPreview() {
     const a = alignment(people[0], state.ghost)
     const held = lock.update(a.score, now)
     paintAlign(a, held)
-    drawLockRing(ctx, people[0], w, h, a, held)
+    drawLockRing(ctx, people[0], box, a, held)
 
     startPreview.raf = requestAnimationFrame(loop)
   }
@@ -881,7 +882,7 @@ function paintAlign(a, held) {
  * lock that trips the instant somebody passes through the right place fires
  * while they are still walking.
  */
-function drawLockRing(ctx, lm, w, h, a, held) {
+function drawLockRing(ctx, lm, box, a, held) {
   const hip = {
     x: (lm[L.leftHip].x + lm[L.rightHip].x) / 2,
     y: (lm[L.leftHip].y + lm[L.rightHip].y) / 2,
@@ -890,9 +891,9 @@ function drawLockRing(ctx, lm, w, h, a, held) {
     x: (lm[L.leftShoulder].x + lm[L.rightShoulder].x) / 2,
     y: (lm[L.leftShoulder].y + lm[L.rightShoulder].y) / 2,
   }
-  const cx = (1 - hip.x) * w
-  const cy = hip.y * h
-  const torsoPx = Math.abs(hip.y - sh.y) * h
+  const cx = box.x + (1 - hip.x) * box.w
+  const cy = box.y + hip.y * box.h
+  const torsoPx = Math.abs(hip.y - sh.y) * box.h
   const r = Math.max(42, torsoPx * 1.35)
 
   ctx.save()
@@ -925,6 +926,36 @@ function drawLockRing(ctx, lm, w, h, a, held) {
   ctx.restore()
 }
 
+/**
+ * Where the video actually is inside its container.
+ *
+ * The overlay is a canvas stretched over a `<video>`, and the landmarks are
+ * normalised to the VIDEO's frame, not the canvas's. Those are the same
+ * rectangle only when the two aspect ratios match — and `object-fit: cover`
+ * guarantees they usually do not. The browser scales the feed until it fills
+ * the box and throws the overflow away, so a point at x = 0.35 of the frame
+ * is not at x = 0.35 of the screen.
+ *
+ * Drawing straight onto the canvas was wrong everywhere, just mildly enough
+ * on a laptop to survive: a 16:9 feed in a 1.34 stage puts the skeleton
+ * about 5% too narrow, which reads as a slightly thin person. On a phone —
+ * a 1.78 feed in a 0.52 window — it is 27% out, and the stick figure stands
+ * in the middle of the screen while the body fills it.
+ *
+ * Returns the rectangle the video occupies, which may extend well beyond the
+ * canvas on both sides. That is correct: the parts outside are the parts the
+ * browser is cropping.
+ */
+function videoBox(canvasW, canvasH, vw, vh, fit = 'cover') {
+  if (!vw || !vh) return { x: 0, y: 0, w: canvasW, h: canvasH }
+  const scale = fit === 'contain'
+    ? Math.min(canvasW / vw, canvasH / vh)
+    : Math.max(canvasW / vw, canvasH / vh)
+  const w = vw * scale
+  const h = vh * scale
+  return { x: (canvasW - w) / 2, y: (canvasH - h) / 2, w, h }
+}
+
 function drawMark(ctx, w, h) {
   ctx.save()
   ctx.strokeStyle = 'rgba(255,255,255,0.3)'
@@ -949,13 +980,15 @@ const BONES = [
  * mirrored preview, so x has to be flipped or the outline lands on the wrong
  * side of them and they step the wrong way to meet it.
  */
-function drawSkeleton(ctx, lm, w, h, colour, width) {
+function drawSkeleton(ctx, lm, box, colour, width) {
   ctx.save()
   ctx.strokeStyle = colour
   ctx.lineWidth = width
   ctx.lineCap = 'round'
-  const X = (p) => (1 - p.x) * w
-  const Y = (p) => p.y * h
+  // Mirrored about the VIDEO's centre, not the canvas's, because the preview
+  // is mirrored and the member is looking at themselves.
+  const X = (p) => box.x + (1 - p.x) * box.w
+  const Y = (p) => box.y + p.y * box.h
   for (const [a, b] of BONES) {
     const pa = lm[a]
     const pb = lm[b]
@@ -2631,6 +2664,7 @@ window.__pilot = {
      thirty-second sessions to produce. */
   presentCompare: () => presentCompare(),
   idleFor: idleMsFor,
+  videoBox,
   /* The detector runs on load; the harness needs to run it on demand. */
   noteChanges: () => noteChanges(),
   /*
