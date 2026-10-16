@@ -13,6 +13,7 @@
  */
 
 import * as report from './report.js'
+import { describe as describeChange } from './changes.js'
 
 const pct = (n) => (n === null || n === undefined ? '—' : `${Math.round(n * 100)}%`)
 const day = (ts) => new Date(ts).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -34,7 +35,7 @@ export function interval(successes, n) {
 
 const band = (ci) => (ci ? `${pct(ci.p)} (95% CI ${pct(ci.low)}–${pct(ci.high)}, n=${ci.n})` : '—')
 
-export function writeUp({ sessions, summary, verdict, counters, config, notes = [], now = Date.now() }) {
+export function writeUp({ sessions, summary, verdict, counters, config, rig = null, changeLog = [], notes = [], now = Date.now() }) {
   const rows = sessions.filter((s) => s.endedAt)
   const completed = rows.filter((s) => s.outcome !== 'abandoned')
   const kept = completed.filter((s) => (s.kept?.measurement ?? 0) + (s.kept?.post ?? 0) + (s.kept?.candid ?? 0) > 0)
@@ -118,10 +119,89 @@ export function writeUp({ sessions, summary, verdict, counters, config, notes = 
       'produces un-comparable measurements is not an instrument whatever its keep rate.',
   )
 
+  // ── the room, which is the other half of comparable ─────────────────────
+  const reg = report.registrationStats(rows)
+  const light = report.lightByDay(rows, rig)
+  p('### And was the room still?')
+  if (!rig) {
+    p(
+      'No rig was ever saved, so the camera was never locked and the light was never measured ' +
+        'against a baseline. **Every comparability number above is therefore an upper bound**: it ' +
+        'says the bodies lined up, and says nothing about whether the camera re-exposed itself ' +
+        'between two visits. Save a rig before the next run.',
+    )
+  } else {
+    p(
+      `The camera was set up on ${day(rig.at)}` +
+        (rig.locks?.locked?.length ? ` with ${rig.locks.locked.join(' and ')} locked` : ' with nothing lockable on it') +
+        (rig.locks?.impossible?.length ? `; ${rig.locks.impossible.join(' and ')} could not be locked on this camera.` : '.'),
+    )
+    if (reg.n) {
+      p(
+        `**${pct(reg.share)}** of return visits (${reg.applied} of ${reg.n}) could be registered onto ` +
+          `the member's first frame; the typical correction was ${reg.meanTurnDeg}° and ${reg.meanScale}×.` +
+          (reg.thin ? ' **Too few to trust** — a direction, not a number.' : ''),
+      )
+      if (reg.reasons.length) {
+        p('The rest were left exactly as captured, for these reasons:')
+        p('| Why | Times |', '|---|---|')
+        for (const r of reg.reasons) p(`| ${r.why} | ${r.n} |`)
+        p(
+          '',
+          'A reason that keeps recurring is a physical fault, not a software one — a mark that has ' +
+            'moved, a camera that got nudged, a light that stopped reaching the torso.',
+        )
+      }
+    }
+    if (light.length) {
+      const worstDay = light.reduce((w, d) => (Math.abs(d.worst) > Math.abs(w.worst) ? d : w))
+      p(
+        `The light moved by at most **${Math.abs(worstDay.worst).toFixed(2)} of a stop** from where it ` +
+          `was at setup (${day(worstDay.day)}). ` +
+          (Math.abs(worstDay.worst) >= 0.4
+            ? '**That is enough to see in a photograph**, and the frames either side of it are not ' +
+              'strictly comparable. It should be in the change log.'
+            : 'That is below the point where it shows in a photograph.'),
+      )
+    } else {
+      p('No light readings were recorded on this rig, so nothing can be said about whether the room held still.')
+    }
+  }
+
   p('## Where people stopped')
   p('| Step | Reached | Lost here |', '|---|---|---|')
   for (const r of fn) p(`| ${r.label} | ${r.value} | ${r.lost ? `${r.lost} (${pct(r.lostShare)})` : '—'} |`)
   if (worst) p('', `The biggest single loss is at **${worst.label}** — ${worst.lost} people.`)
+
+  const away = {
+    sawAndWalked: 'looked over and kept walking',
+    cameAndLeft: 'came over and left before starting',
+    queueBalked: 'saw a queue and left',
+    notToday: 'asked about it but would not do it today',
+  }
+  const tallied = Object.entries(away)
+    .map(([k, label]) => ({ label, n: counters[k] ?? 0 }))
+    .filter((t) => t.n)
+  if (tallied.length) {
+    const total = tallied.reduce((a, t) => a + t.n, 0)
+    p(
+      '',
+      `The operator also logged **${total} people who never reached the first screen**: ` +
+        tallied.map((t) => `${t.n} ${t.label}`).join(', ') + '.',
+      '',
+      'These are not in the table above and should not be added to it — the funnel counts screens and ' +
+        'this counts a person changing their mind. They are here because every rate in this document ' +
+        'has a denominator of people who had already decided to take part, and that is the most ' +
+        'flattering denominator available.',
+    )
+  } else {
+    p(
+      '',
+      '**Nobody logged a walk-away.** In a working gym that is unlikely to be true, and it means ' +
+        'every rate here is a rate among the willing. Treat the funnel as describing the people who ' +
+        'took part, not the people who saw it.',
+    )
+  }
 
   p('## Demand, and what it implies about pods')
   p(
@@ -149,6 +229,21 @@ export function writeUp({ sessions, summary, verdict, counters, config, notes = 
     p('## What the operator wrote down')
     p('The part no dashboard can see.')
     for (const n of notes) p(`**${n.date}** — ${n.text}`)
+  }
+
+  p('---', '## What changed while it was running')
+  if (!changeLog.length) {
+    p(
+      'Nothing that a member could notice was edited after the pilot started. The settings are ' +
+        'snapshotted at the start and compared on every load, so this is a check rather than a claim.',
+    )
+  } else {
+    p(
+      `${changeLog.length} change(s) were detected. Every number above that depends on one of them ` +
+        'covers two different things either side of the date, and the average of two different things ' +
+        'is not a measurement of either.',
+    )
+    for (const c of changeLog) p(`- ${day(c.at)} — ${describeChange(c)}`)
   }
 
   p('---', '## What this pilot cannot tell you')

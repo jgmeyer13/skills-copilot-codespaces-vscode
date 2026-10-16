@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="174mm" height="236mm" viewBox="0 0 174 236">
+  <rect width="174" height="236" fill="#ffffff"/>
+  
+  <text x="0" y="8" font-size="7" font-weight="700" fill="#2b3440">PODIUM — day sheet</text>
+  <text x="0" y="14.5" font-size="3.2" fill="#6b7684">One per day on shift. The rows the laptop cannot fill in are the ones at the bottom.</text>
+
+  
+  <text x="0" y="23.2" font-size="2.6" font-weight="600" fill="#6b7684">DATE</text>
+  <line x1="0" y1="25" x2="46" y2="25" stroke="#2b3440" stroke-width="0.35"/>
+  
+  <text x="52" y="23.2" font-size="2.6" font-weight="600" fill="#6b7684">ON SHIFT</text>
+  <line x1="52" y1="25" x2="98" y2="25" stroke="#2b3440" stroke-width="0.35"/>
+  
+  <text x="104" y="23.2" font-size="2.6" font-weight="600" fill="#6b7684">LIGHT READING</text>
+  <line x1="104" y1="25" x2="136" y2="25" stroke="#2b3440" stroke-width="0.35"/>
+  
+  <text x="142" y="23.2" font-size="2.6" font-weight="600" fill="#6b7684">CAMERA LOCKED? Y / N</text>
+  <line x1="142" y1="25" x2="174" y2="25" stroke="#2b3440" stroke-width="0.35"/>
+
+  <text x="0" y="37" font-size="4" font-weight="700" fill="#2b3440">Sessions</text>
+  <text x="1" y="40" font-size="2.6" font-weight="600" fill="#6b7684">TIME</text>
+  <text x="19" y="40" font-size="2.6" font-weight="600" fill="#6b7684">NEW / BACK</text>
+  <line x1="18" y1="42" x2="18" y2="154.2" stroke="#c8ced6" stroke-width="0.25"/>
+  <text x="41" y="40" font-size="2.6" font-weight="600" fill="#6b7684">SOLO / SQUAD</text>
+  <line x1="40" y1="42" x2="40" y2="154.2" stroke="#c8ced6" stroke-width="0.25"/>
+  <text x="65" y="40" font-size="2.6" font-weight="600" fill="#6b7684">KEPT?</text>
+  <line x1="64" y1="42" x2="64" y2="154.2" stroke="#c8ced6" stroke-width="0.25"/>
+  <text x="81" y="40" font-size="2.6" font-weight="600" fill="#6b7684">SENT?</text>
+  <line x1="80" y1="42" x2="80" y2="154.2" stroke="#c8ced6" stroke-width="0.25"/>
+  <text x="97" y="40" font-size="2.6" font-weight="600" fill="#6b7684">MINS</text>
+  <line x1="96" y1="42" x2="96" y2="154.2" stroke="#c8ced6" stroke-width="0.25"/>
+  <text x="111" y="40" font-size="2.6" font-weight="600" fill="#6b7684">QUEUE</text>
+  <line x1="110" y1="42" x2="110" y2="154.2" stroke="#c8ced6" stroke-width="0.25"/>
+  <text x="127" y="40" font-size="2.6" font-weight="600" fill="#6b7684">WHAT THEY SAID</text>
+  <line x1="126" y1="42" x2="126" y2="154.2" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="42" x2="174" y2="42" stroke="#2b3440" stroke-width="0.5"/>
+  <line x1="0" y1="48.6" x2="174" y2="48.6" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="55.2" x2="174" y2="55.2" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="61.8" x2="174" y2="61.8" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="68.4" x2="174" y2="68.4" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="75" x2="174" y2="75" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="81.6" x2="174" y2="81.6" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="88.19999999999999" x2="174" y2="88.19999999999999" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="94.8" x2="174" y2="94.8" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="101.4" x2="174" y2="101.4" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="108" x2="174" y2="108" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="114.6" x2="174" y2="114.6" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="121.19999999999999" x2="174" y2="121.19999999999999" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="127.8" x2="174" y2="127.8" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="134.39999999999998" x2="174" y2="134.39999999999998" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="141" x2="174" y2="141" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="147.6" x2="174" y2="147.6" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="154.2" x2="174" y2="154.2" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="42" x2="0" y2="154.2" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="174" y1="42" x2="174" y2="154.2" stroke="#c8ced6" stroke-width="0.25"/>
+
+  <text x="0" y="169" font-size="4" font-weight="700" fill="#2b3440">The ones the laptop never sees</text>
+  <text x="0" y="175" font-size="3" fill="#6b7684">These decide whether the funnel numbers mean anything. Tick as it happens, not at the end of the day.</text>
+
+  <text x="0" y="184" font-size="3.2" font-weight="600" fill="#2b3440">Looked, did not come over</text>
+  <rect x="78" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="83.8" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="89.6" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="95.4" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="101.2" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="107" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="112.80000000000001" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="118.60000000000001" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="124.4" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="130.2" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="136" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="141.8" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="147.60000000000002" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="153.4" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="159.20000000000002" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="165" y="180.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/>
+  <text x="0" y="193" font-size="3.2" font-weight="600" fill="#2b3440">Came over, walked away before starting</text>
+  <rect x="78" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="83.8" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="89.6" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="95.4" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="101.2" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="107" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="112.80000000000001" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="118.60000000000001" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="124.4" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="130.2" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="136" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="141.8" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="147.60000000000002" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="153.4" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="159.20000000000002" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="165" y="189.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/>
+  <text x="0" y="202" font-size="3.2" font-weight="600" fill="#2b3440">Saw a queue and left</text>
+  <rect x="78" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="83.8" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="89.6" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="95.4" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="101.2" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="107" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="112.80000000000001" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="118.60000000000001" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="124.4" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="130.2" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="136" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="141.8" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="147.60000000000002" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="153.4" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="159.20000000000002" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="165" y="198.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/>
+  <text x="0" y="211" font-size="3.2" font-weight="600" fill="#2b3440">Asked about it but would not do it today</text>
+  <rect x="78" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="83.8" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="89.6" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="95.4" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="101.2" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="107" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="112.80000000000001" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="118.60000000000001" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="124.4" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="130.2" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="136" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="141.8" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="147.60000000000002" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="153.4" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="159.20000000000002" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/><rect x="165" y="207.2" width="4.4" height="4.4" fill="none" stroke="#6b7684" stroke-width="0.35" rx="0.6"/>
+
+  <line x1="0" y1="216" x2="174" y2="216" stroke="#c8ced6" stroke-width="0.3"/>
+  <text x="0" y="222" font-size="3.2" font-weight="600" fill="#2b3440">What the light was doing · what broke · anything a member said twice</text>
+  <line x1="0" y1="226" x2="174" y2="226" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="230.6" x2="174" y2="230.6" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="235.2" x2="174" y2="235.2" stroke="#c8ced6" stroke-width="0.25"/>
+</svg>

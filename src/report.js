@@ -257,3 +257,101 @@ export function worstStep(rows) {
   if (!candidates.length) return null
   return candidates.reduce((a, b) => (b.lost > a.lost ? b : a))
 }
+
+/**
+ * How often the rig could line a visit up, and how often it refused.
+ *
+ * The refusals are the interesting half. A high applied-share says the room
+ * is behaving; a pile of refusals for the same reason says something physical
+ * is wrong — a mark that has moved, a camera that got nudged, a light that
+ * stopped reaching the torso — and the reason string names which.
+ *
+ * Only returning members can be registered at all, so first visits are not
+ * counted as failures. A denominator that includes sessions where the thing
+ * was never attempted makes a working rig look broken.
+ */
+/*
+ * The refusal, said to the person standing in the room.
+ *
+ * registration.js reports in its own terms — scale, roll, rmse — which is
+ * right for a log and useless on a shift. An operator cannot act on "rmse
+ * 0.041"; they can act on "the body does not match their first visit". The
+ * raw string is still on the session row for anyone who wants it.
+ *
+ * Grouping on the cause rather than the sentence also means twelve different
+ * measured values read as one recurring problem, which is the whole reason
+ * for counting them.
+ */
+const REFUSALS = [
+  [/scale/i, 'standing nearer or further than last time'],
+  [/roll/i, 'leaning — check the camera and the floor are level'],
+  [/shifted/i, 'standing too far off the mark'],
+  [/does not fit/i, 'the body does not match their first visit'],
+  [/not clearly visible/i, 'the torso was not clearly visible'],
+]
+
+export function refusalReason(text) {
+  const said = String(text ?? '')
+  return REFUSALS.find(([re]) => re.test(said))?.[1] ?? said
+}
+
+export function registrationStats(sessions) {
+  const attempted = sessions.filter((s) => s.registered)
+  const applied = attempted.filter((s) => !s.registered.skipped)
+  const refused = attempted.filter((s) => s.registered.skipped)
+
+  const reasons = new Map()
+  for (const s of refused) {
+    const key = refusalReason(s.registered.skipped)
+    reasons.set(key, (reasons.get(key) ?? 0) + 1)
+  }
+
+  const turns = applied.map((s) => Math.abs(s.registered.rotationDeg ?? 0))
+  const scales = applied.map((s) => s.registered.scale ?? 1)
+  const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
+
+  return {
+    n: attempted.length,
+    applied: applied.length,
+    share: rate(applied.length, attempted.length),
+    meanTurnDeg: turns.length ? round(mean(turns), 2) : null,
+    worstTurnDeg: turns.length ? round(Math.max(...turns), 2) : null,
+    meanScale: scales.length ? round(mean(scales), 3) : null,
+    reasons: [...reasons.entries()]
+      .map(([why, n]) => ({ why, n }))
+      .sort((a, b) => b.n - a.n),
+    thin: attempted.length < 10,
+  }
+}
+
+/**
+ * The room's light, day by day, against the reading taken at setup.
+ *
+ * In stops, because a tenth of a stop is invisible and a whole one is a
+ * different photograph, and because a percentage of an arbitrary 0–255 mean
+ * sounds precise while meaning nothing.
+ *
+ * Sessions recorded on a different camera are dropped rather than converted.
+ * There is no honest conversion: a different sensor reading the same wall is
+ * a different number, and plotting them together would invent a drift that
+ * never happened.
+ */
+export function lightByDay(sessions, rig) {
+  if (!rig?.light?.mean) return []
+  const byDay = new Map()
+  for (const s of sessions) {
+    if (!s.light?.mean) continue
+    if (rig.camera?.deviceId && s.camera?.deviceId && rig.camera.deviceId !== s.camera.deviceId) continue
+    const key = dayKey(s.startedAt)
+    if (!byDay.has(key)) byDay.set(key, [])
+    byDay.get(key).push(Math.log2(s.light.mean / rig.light.mean))
+  }
+  return [...byDay.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([day, stops]) => ({
+      day,
+      n: stops.length,
+      mean: round(stops.reduce((a, b) => a + b, 0) / stops.length, 3),
+      worst: round(stops.reduce((w, v) => (Math.abs(v) > Math.abs(w) ? v : w), 0), 3),
+    }))
+}

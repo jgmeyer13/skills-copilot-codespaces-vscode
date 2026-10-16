@@ -70,6 +70,7 @@ src/pose.js         MediaPipe in the browser · replay source for testing
 src/scoring.js      pose templates and best-frame selection — pure, no DOM
 src/registration.js the similarity fit that lines two visits up — pure
 src/rig.js          the camera lock and the light fingerprint — pure
+src/changes.js      what was edited mid-pilot, noticed rather than remembered
 src/capture.js      the thirty seconds
 src/telemetry.js    the session log, the summary, the verdict, CSV
 vendor/             MediaPipe runtime and the 5.6MB pose model, served locally
@@ -83,6 +84,7 @@ node tools/test-scoring.mjs    # the pose templates, against synthetic skeletons
 node tools/test-align.mjs      # the alignment maths — distance, drift, rotation, the hold
 node tools/test-registration.mjs # the fit that lines two visits up, against known transforms
 node tools/test-rig.mjs        # the camera lock and the light drift, in stops
+node tools/test-changes.mjs    # the mid-pilot change detector
 node tools/test-setup.mjs      # the rig screen in a browser, on a camera that cannot lock everything
 node tools/test-compare.mjs    # the flip, the timeline and the card
 node tools/test-mirror.mjs     # the same maths reaching the screen, in a real browser
