@@ -85,6 +85,56 @@ That is what the tape measure decides. Not just whether somebody fits — whethe
 the frame is 54 m of timber or 59.4 m, and whether you ask the gym for 9.0 m²
 or 10.0 m².
 
+## Version 4 — a bedroom, a phone, and a strip of tape
+
+Built from a friend's actual training space: **2 × 5 m, 2.4 m ceiling, and
+nothing stays set up** — dumbbells, bench and barbell go back into corners and
+under the bed after every session.
+
+`show_version = 4`, `camera_kind = 2`.
+
+### A phone needs 2.1 m, not 2.9 m
+
+Held portrait, a phone's sensor is tall, so it spends its angle on height —
+which is exactly what a standing person needs. At about 61° vertical it needs
+**2 080 mm** for a 2 100 mm person with a 10% margin, against 2 910 mm for the
+C920.
+
+Used end to end that is **2 750 mm of his 5 000**, leaving 2 250 mm spare. The
+depth everyone assumed was the problem is not the problem.
+
+### What the width does, and the bug it exposed
+
+The crop maths was wrong for this case and had to be rewritten. It read
+`crop_width = frame_height × 4/5`, which assumes the saved photo is always
+limited by the frame's HEIGHT. True for a landscape webcam, which has far more
+width than it needs. **A phone held portrait is about 3:4 — narrower than the
+4:5 the app saves** — so the crop runs out of width first and has to give up
+height to keep its proportions. The old formula would have reported a person
+fitting while their head was outside the picture.
+
+With it fixed, the saved photo at 2 100 mm is **1 866 mm wide in a 2 000 mm
+room: 67 mm each side.** That is the binding constraint of the whole idea, and
+it has a consequence worth stating plainly:
+
+> **The floor mark has to anchor the phone, not just the person.** 67 mm is
+> less than the width of a hand. A phone a little off the room's centre line
+> puts a wall edge in the shot, and no amount of software fixes a wall.
+
+### The ceiling settles the light
+
+2 400 mm leaves **300 mm above a 2 100 mm person**. A 1 600 mm strip softbox
+hung overhead would need roughly 4 m. Overhead lighting is simply unavailable
+at home, so the light is from the side or it is the room's own — which suits a
+budget that is about R500 in total, when a Godox and a stand alone is R5 430.
+
+### What it cannot tell you
+
+The phone's field of view here is derived from a 73° diagonal off a spec
+sheet, and spec sheets are what the C920 taught us not to trust. **Measure the
+actual phone with `fov.html`** and type the answer in. If it is narrower than
+assumed, the 67 mm goes first.
+
 ## Still open in the model
 - Dimensioned 2D output a fabricator could quote from. OpenSCAD exports mesh
   (STL); a metal shop wants a dimensioned PDF and ideally STEP. That is a

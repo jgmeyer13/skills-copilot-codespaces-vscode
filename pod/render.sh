@@ -24,3 +24,8 @@ shot front "$C,90,0,180,8000" o "-D show_version=1 -D show_enclosure=false"
 
 # The cones, with nothing in the way.
 shot cones "$C,72,0,215,10000" p "-D show_version=1 -D show_enclosure=false -D show_floor_grid=false -D show_dimensions=false"
+
+# The bedroom: 2 x 5 m, a phone held portrait, nothing permanent.
+shot v4-bedroom "0,2500,1150,64,0,205,11000" p "-D show_version=4 -D camera_kind=2"
+shot v4-plan    "0,1400,0,0,0,0,7000"       o "-D show_version=4 -D camera_kind=2 -D show_ceiling=false"
+shot v4-side    "0,2400,1150,90,0,90,10500" o "-D show_version=4 -D camera_kind=2 -D show_enclosure=false"

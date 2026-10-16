@@ -20,7 +20,9 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 // ── what to draw ─────────────────────────────────────────────────────────
-show_version      = 1;     // 1 = weekend corner, 2 = pine unit, 3 = T-slot pod
+show_version      = 1;     // 1 = weekend corner  2 = pine unit
+                           // 3 = T-slot pod      4 = a bedroom, with a phone
+camera_kind       = 1;     // 1 = Logitech C920 landscape  2 = a phone, portrait
 show_person       = true;
 show_camera_cone  = true;
 show_light_cone   = true;
@@ -33,11 +35,15 @@ show_dimensions   = true;
  * somebody.
  */
 show_enclosure    = true;
+show_ceiling      = true;   // off for a plan view, or it covers everything
 
 $fn = 24;                  // 24 while working. 64 for a final F6.
 
 // ── GEOMETRY — from research. Change deliberately. ───────────────────────
-camera_distance   = 2900;  // lens to floor mark. THE CRITICAL NUMBER.
+camera_distance   = camera_kind == 2 ? 2100 : 2900;
+                           // lens to floor mark. THE CRITICAL NUMBER.
+                           // A phone held portrait needs far less, because
+                           // its tall sensor spends its angle on height.
                            // 2600 was the original figure; see the echo
                            // output below for whether it survives.
 camera_height     = 1050;  // lens height, roughly hip height
@@ -52,10 +58,20 @@ camera_clearance  = 300;   // room behind the lens for the stand and a hand
 // which is the entire argument this model exists to settle.
 bay_depth         = mark_from_back_wall + camera_distance + camera_clearance;
 
-// ── CAMERA — Logitech C920, 78° diagonal ─────────────────────────────────
-fov_vertical      = 43.3;  // 16:9 crop of 78° diagonal. 45.0 is the
-                           // optimistic spec-sheet figure — try both.
-fov_horizontal    = 70.4;
+// ── CAMERA ───────────────────────────────────────────────────────────────
+/*
+ * A phone held portrait is not a small webcam. Its sensor is about 3:4, which
+ * is NARROWER than the 4:5 photo the app saves, so the picture runs out of
+ * width before it runs out of height — the opposite of the webcam — and the
+ * distance it needs is set by the horizontal angle, not the vertical one.
+ *
+ * Both sets of numbers below are derived from a diagonal figure off a spec
+ * sheet (78° for the C920, about 73° for a 26mm-equivalent phone lens) and
+ * both are worth exactly what a spec sheet is worth. Measure the camera you
+ * will use with fov.html and type the answer in here.
+ */
+fov_vertical      = camera_kind == 2 ? 61.3 : 43.3;
+fov_horizontal    = camera_kind == 2 ? 47.9 : 70.4;
 output_aspect_w   = 4;     // the app writes 4:5 portrait JPEGs
 output_aspect_h   = 5;
 margin            = 0.10;  // headroom and footroom wanted, as a fraction
@@ -81,6 +97,15 @@ reflector_width   = 1000;
 reflector_height  = 2000;
 reflector_angle   = 20;    // degrees of lean toward the member
 
+// ── THE BEDROOM (version 4) ──────────────────────────────────────────────
+// Measured off a friend's actual training space: 2 x 5 m, standard ceiling,
+// and nothing stays set up — the dumbbells, bench and barbell go into
+// corners and under the bed after every session.
+room_width        = 2000;
+room_length       = 5000;
+room_height       = 2400;
+room_mark_from_wall = 500;   // closer than a gym: the wall IS the backdrop
+
 // ── BUILD ────────────────────────────────────────────────────────────────
 batten            = 70;    // version 2, pine, square section
 extrusion         = 40;    // version 3, T-slot
@@ -91,13 +116,42 @@ monitor_h         = 340;
 monitor_centre_z  = 1500;
 
 // ── derived ──────────────────────────────────────────────────────────────
-mark_y   = mark_from_back_wall;
+mark_y   = show_version == 4 ? room_mark_from_wall : mark_from_back_wall;
 camera_y = mark_y + camera_distance;
 
 function frame_h(d) = 2 * d * tan(fov_vertical / 2);
 function frame_w(d) = 2 * d * tan(fov_horizontal / 2);
-function crop_w(d)  = frame_h(d) * output_aspect_w / output_aspect_h;
-function needed_distance(h) = h / (2 * tan(fov_vertical / 2));
+
+/*
+ * The largest 4:5 rectangle that fits inside what the sensor sees.
+ *
+ * This used to be `frame_h * 4/5`, which assumes the saved photo is always
+ * limited by the frame's HEIGHT — true for a landscape webcam, where there is
+ * far more width than you need. A phone held portrait is the other way round:
+ * its native shape is about 3:4, which is NARROWER than 4:5, so the crop runs
+ * out of width first and has to give up height to keep its proportions. Get
+ * this wrong on a phone and the model says a person fits when their head is
+ * outside the picture.
+ */
+function out_aspect() = output_aspect_w / output_aspect_h;
+function crop_w(d) =
+  (frame_w(d) / frame_h(d) >= out_aspect())
+    ? frame_h(d) * out_aspect()          // height-limited: a wide sensor
+    : frame_w(d);                        // width-limited: a tall one
+function crop_h(d) =
+  (frame_w(d) / frame_h(d) >= out_aspect())
+    ? frame_h(d)
+    : frame_w(d) / out_aspect();
+
+/** What is actually stopping the person being bigger in the saved photo. */
+function binding() = (frame_w(1000) / frame_h(1000) >= out_aspect()) ? "height" : "width";
+
+/* The distance at which the SAVED photo is `h` tall, whichever way it is
+   limited — not the distance at which the sensor sees `h`. */
+function needed_distance(h) =
+  (binding() == "height")
+    ? h / (2 * tan(fov_vertical / 2))
+    : (h * out_aspect()) / (2 * tan(fov_horizontal / 2));
 
 // ── colours ──────────────────────────────────────────────────────────────
 C_FRAME   = [0.76, 0.62, 0.42];
@@ -321,6 +375,40 @@ module version_3() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════
+//  VERSION 4 — a bedroom, a phone, and a strip of tape
+// ═════════════════════════════════════════════════════════════════════════
+
+/*
+ * No frame, no fabric, no stand. The walls are the enclosure and the phone is
+ * the camera, because the whole budget is about R500 and a light alone is
+ * R5,430 of it.
+ *
+ * The things packed into the corners are drawn deliberately. In a gym the bay
+ * is empty; in a bedroom the bay is also where the weights live, and the
+ * question "does the camera position survive the dumbbells going back in the
+ * corner" is the one that decides whether any of this works.
+ */
+module version_4() {
+  w = room_width; d = room_length; h = room_height;
+  color([0.92, 0.90, 0.86]) {
+    translate([0, d / 2, h / 2]) {
+      for (s = [-1, 1]) translate([s * (w / 2 + 50), 0, 0]) cube([100, d, h], center = true);
+    }
+    translate([0, -50, h / 2]) cube([w + 200, 100, h], center = true);   // the backdrop wall
+  }
+  if (show_ceiling)
+    color([0.75, 0.73, 0.70, 0.35]) translate([0, d / 2, h + 50]) cube([w + 200, d, 100], center = true);
+
+  // What lives in the corners, and goes back there after every session.
+  color([0.25, 0.26, 0.28]) {
+    for (s = [-1, 1]) translate([s * (w / 2 - 220), d - 400, 170]) cube([380, 600, 340], center = true);
+    translate([-w / 2 + 300, d - 1200, 220]) cube([500, 1100, 440], center = true);  // bench
+  }
+  color([0.35, 0.36, 0.38])
+    translate([w / 2 - 120, d - 2200, 60]) rotate([0, 0, 6]) cube([80, 2200, 120], center = true);  // barbell
+}
+
+// ═════════════════════════════════════════════════════════════════════════
 //  DIMENSIONS, drawn as thin bars so they read in a render
 // ═════════════════════════════════════════════════════════════════════════
 
@@ -347,9 +435,12 @@ translate(floor_mark_pos) floor_mark();
 if (show_person) translate(floor_mark_pos) person();
 
 camera_rig();
-softbox_assembly();
-reflector();
+// A Godox and a stand is R5,430 of a R7,200 list. The bedroom budget is
+// about R500 in total, so version 4 has neither, and drawing them there
+// would be drawing a bay nobody can afford.
+if (show_version != 4) { softbox_assembly(); reflector(); }
 
+if (show_version == 4 && show_enclosure) version_4();
 if (show_version == 1 && show_enclosure) version_1();
 if (show_version == 2) { if (show_enclosure) version_2(); else version_2_frame_only(); monitor(); }
 if (show_version == 3) { if (show_enclosure) version_3(); else version_3_frame_only(); monitor(); }
@@ -371,16 +462,16 @@ echo(str("bay footprint        ", bay_width, " × ", bay_depth, " mm  =  ",
          round(bay_width * bay_depth / 1000) / 1000, " m²"));
 echo();
 echo(str("vertical FOV used    ", fov_vertical, "°"));
-echo(str("frame height at mark ", round(frame_h(camera_distance)), " mm"));
-echo(str("4:5 crop width       ", round(crop_w(camera_distance)), " mm"));
-echo(str("full sensor width    ", round(frame_w(camera_distance)), " mm"));
+echo(str("sensor sees          ", round(frame_w(camera_distance)), " × ",
+         round(frame_h(camera_distance)), " mm at the mark"));
+echo(str("saved 4:5 photo is   ", round(crop_w(camera_distance)), " × ",
+         round(crop_h(camera_distance)), " mm — limited by ", binding()));
 echo(str("tallest person       ", person_height, " mm"));
 echo(str("FITS?                ",
-         frame_h(camera_distance) >= person_height ? "yes" : "NO — CROPPED",
-         "   (", round(frame_h(camera_distance) - person_height), " mm of air in total)"));
+         crop_h(camera_distance) >= person_height ? "yes" : "NO — CROPPED",
+         "   (", round(crop_h(camera_distance) - person_height), " mm of air in total)"));
 echo(str("distance for ", round(margin * 100), "% margin  ",
          round(needed_distance(person_height * (1 + margin))), " mm"));
-echo();
 /*
  * Is the softbox in the saved photograph?
  *
@@ -414,6 +505,8 @@ rf_cx = -light_distance * sin(light_angle);
 rf_cy = mark_y + light_distance * cos(light_angle);
 rf_clear = worst_clear(rf_cx, rf_cy, reflector_width, 25, light_angle);
 
+if (show_version != 4) {
+echo();
 echo(str("softbox centre, off axis   ", round(sb_cx), " mm"));
 echo(str("SOFTBOX IN SHOT?           ",
          sb_clear < 0 ? "YES — IT INTRUDES" : "no",
@@ -427,4 +520,25 @@ echo();
 echo(str("softbox spans              ", round(softbox_centre_z - softbox_height / 2),
          " to ", round(softbox_centre_z + softbox_height / 2), " mm above the floor"));
 echo(str("unlit below the box        ", round(softbox_centre_z - softbox_height / 2), " mm of leg"));
+}
+
+if (show_version == 4) {
+  side  = (room_width - crop_w(camera_distance)) / 2;
+  depth = mark_y + camera_distance + 150;   // 150 for the phone and whatever props it
+  echo();
+  echo("──────── the bedroom ───────");
+  echo(str("room                 ", room_width, " × ", room_length, " × ", room_height, " mm"));
+  echo(str("camera               ", camera_kind == 2 ? "a phone, held portrait" : "a webcam, landscape"));
+  echo(str("distance it needs    ", round(needed_distance(person_height * (1 + margin))), " mm"));
+  echo(str("distance used        ", camera_distance, " mm"));
+  echo(str("depth used           ", round(depth), " of ", room_length, " mm  (",
+           round(room_length - depth), " mm spare)"));
+  echo(str("saved photo width    ", round(crop_w(camera_distance)), " mm in a ", room_width, " mm room"));
+  echo(str("CLEARS THE WALLS?    ", side > 0 ? "yes" : "NO",
+           "   (", round(side), " mm each side)"));
+  echo(str("ceiling over a ", person_height, "mm person   ", room_height - person_height, " mm"));
+  echo(str("overhead softbox?    ",
+           room_height - person_height > 1700 ? "possible" : "NO — a 1600mm box needs about 4m of ceiling"));
+  echo("────────────────────────────");
+}
 echo("────────────────────────────");
