@@ -2502,6 +2502,7 @@ $('export-report').addEventListener('click', async () => {
     verdict: verdict(summarise(rows), config.decisionRules),
     counters: await db.counters(),
     config,
+    rig: await loadRig(),
     notes,
   })
   const name = `podium-writeup-${new Date().toISOString().slice(0, 10)}${state.demo ? '-DEMO' : ''}.md`

@@ -103,5 +103,55 @@ const none = writeUp({
 })
 check('an empty pilot produces a document rather than crashing', none.includes('# ') && /nothing to compare|no returning visits/i.test(none))
 
+
+// ── the room, and the people who never reached a screen ───────────────────
+
+{
+  // Built through the real session constructor, so summarise() sees the shape
+  // it expects rather than a hand-rolled object that happens to have the
+  // three fields this test cares about.
+  const rigged = (over) => {
+    const row = make({ returning: true, at: Date.parse('2026-09-20T09:00:00Z') })
+    row.camera = { ...row.camera, deviceId: 'a' }
+    return { ...row, ...over }
+  }
+  const sessions = [
+    rigged({ registered: { scale: 1.01, rotationDeg: 0.8 }, light: { mean: 100 } }),
+    rigged({ registered: { scale: 1.02, rotationDeg: -1.0 }, light: { mean: 104 } }),
+    rigged({ registered: { skipped: '16.1° of roll is past 10°' }, light: { mean: 58 } }),
+  ]
+  const rig = { at: Date.parse('2026-09-19T08:00:00Z'), light: { mean: 100 }, camera: { deviceId: 'a' },
+    locks: { locked: ['Exposure'], impossible: ['White balance'], failed: [] } }
+  const common = {
+    summary: summarise(sessions),
+    verdict: verdict(summarise(sessions), config.decisionRules),
+    config,
+    now: Date.parse('2026-10-20T09:00:00Z'),
+  }
+
+  const withRig = writeUp({ ...common, sessions, counters: { sawAndWalked: 7, queueBalked: 2 }, rig })
+
+  check('the write-up says whether the room was still', /And was the room still\?/.test(withRig))
+  check('and names what was locked and what could not be',
+    /Exposure locked/.test(withRig) && /White balance could not be locked/.test(withRig))
+  check('it reports the share that registered', /\*\*67%\*\* of return visits/.test(withRig),
+    (withRig.match(/\*\*\d+%\*\* of return visits[^.]*/) || [''])[0])
+  check('refusals are listed in the room\'s terms, not the maths',
+    /leaning — check the camera/.test(withRig) && !/rmse/.test(withRig))
+  check('the worst light drift is stated in stops',
+    /0\.7\d of a stop/.test(withRig), (withRig.match(/\*\*[\d.]+ of a stop\*\*/) || [''])[0])
+  check('and a drift that big is called not comparable',
+    /not strictly comparable/.test(withRig))
+  check('the walk-aways are reported and kept out of the funnel',
+    /9 people who never reached the first screen/.test(withRig) && /should not be added to it/.test(withRig),
+    (withRig.match(/\*\*\d+ people who never[^*]*\*\*/) || [''])[0])
+
+  const noRig = writeUp({ ...common, sessions, counters: {}, rig: null })
+  check('with no rig the comparability claim is called an upper bound',
+    /upper bound/.test(noRig) && /never locked/.test(noRig))
+  check('and no walk-aways logged is itself reported as a problem',
+    /Nobody logged a walk-away/.test(noRig) && /rate among the willing/.test(noRig))
+}
+
 console.log(failed ? `\n${failed} FAILED\n` : '\nwrite-up OK\n')
 process.exit(failed ? 1 : 0)
