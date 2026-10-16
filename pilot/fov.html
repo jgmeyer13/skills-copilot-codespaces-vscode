@@ -1,0 +1,323 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PODIUM — camera ruler</title>
+<!--
+  The one measurement the whole bay size rests on.
+
+  camera_distance is currently 2600mm, derived from a spec sheet that says a
+  C920 is 78° diagonal. Converted to 16:9 that is 43.3° vertical, and at
+  2600mm a 2100mm person does not fit. Converted from the "about 45°" the
+  project has been carrying, they just do. Those two answers disagree about
+  how much gym floor to ask for, so the sheet is worth nothing and a tape
+  measure is worth everything.
+
+  Two things make the measurement go wrong, and both are handled here rather
+  than in a list of instructions nobody reads:
+
+  1. A cropped preview. Every other screen in this app covers its container,
+     which throws away part of the sensor. Measure that and you measure the
+     CSS. Here the video is letterboxed, never cropped, and the frame edge is
+     drawn so you can see what you are reading to.
+  2. Reading off-centre. Webcams barrel-distort toward the corners, so the
+     readings are taken up the centre column, which is drawn for you.
+
+  It also draws the 4:5 box the app actually saves, because that — not the
+  16:9 preview — is what has to hold a person.
+-->
+<style>
+  :root {
+    --bg:#07090c; --surface:#11161d; --surface-2:#171d26;
+    --edge:rgba(255,255,255,0.1); --hair:rgba(255,255,255,0.07);
+    --text:#f2f5f9; --text-2:#9fadbf; --text-3:#6b7a8d;
+    --go:#3ddc84; --warn:#f5a524; --stop:#ff4d57; --info:#5aa9ff;
+    --font:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Inter,Roboto,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--text); font-family:var(--font);
+    padding:20px; display:grid; gap:18px;
+    grid-template-columns:minmax(380px,1fr) minmax(320px,440px);
+    align-items:start;
+  }
+  @media (max-width:900px) { body { grid-template-columns:1fr; } }
+  h1 { font-size:19px; margin:0 0 2px; letter-spacing:-0.2px; }
+  h1 small { color:var(--text-3); font-weight:400; font-size:13px; letter-spacing:0; }
+  h2 { font-size:12px; letter-spacing:1.4px; text-transform:uppercase; color:var(--text-3);
+       margin:0 0 10px; font-weight:600; }
+
+  .stage { position:relative; background:#000; border:1px solid var(--edge);
+           border-radius:14px; overflow:hidden; aspect-ratio:16/9; }
+  /* contain, never cover — a cropped preview measures the CSS, not the lens */
+  #v { width:100%; height:100%; object-fit:contain; display:block; background:#000; }
+  #o { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+
+  .panel { background:var(--surface); border:1px solid var(--hair); border-radius:14px; padding:16px; }
+  .panel + .panel { margin-top:14px; }
+
+  label { display:block; font-size:12px; color:var(--text-2); margin:0 0 5px; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:11px; }
+  .row.one { grid-template-columns:1fr; }
+  input, select {
+    width:100%; background:var(--surface-2); color:var(--text); font-family:var(--mono);
+    font-size:16px; border:1px solid var(--edge); border-radius:9px; padding:9px 11px;
+  }
+  input:focus, select:focus { outline:2px solid var(--info); outline-offset:1px; }
+
+  .out { font-family:var(--mono); font-size:13px; line-height:1.75; }
+  .out b { color:var(--go); font-weight:600; }
+  .out .k { color:var(--text-3); display:inline-block; min-width:188px; padding-right:12px; }
+  .verdict { margin-top:12px; padding:11px 13px; border-radius:10px; font-size:14px; line-height:1.5; }
+  .verdict.go   { background:rgba(61,220,132,0.12); border:1px solid rgba(61,220,132,0.4); }
+  .verdict.warn { background:rgba(245,165,36,0.12); border:1px solid rgba(245,165,36,0.4); }
+  .verdict.stop { background:rgba(255,77,87,0.12); border:1px solid rgba(255,77,87,0.4); }
+  .muted { color:var(--text-2); font-size:13px; line-height:1.6; }
+  .muted b { color:var(--text); }
+  ol { margin:0; padding-left:19px; }
+  li { margin-bottom:8px; font-size:13px; line-height:1.55; color:var(--text-2); }
+  li b { color:var(--text); }
+  .pill { display:inline-block; font-family:var(--mono); font-size:11px; padding:2px 7px;
+          border-radius:5px; background:var(--surface-2); color:var(--text-2); border:1px solid var(--hair); }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; margin-top:9px; font-size:11.5px; color:var(--text-3); }
+  .legend i { display:inline-block; width:11px; height:3px; vertical-align:middle; margin-right:5px; border-radius:2px; }
+</style>
+
+<div>
+  <h1>Camera ruler <small>— what the lens actually sees, in millimetres</small></h1>
+  <p class="muted" style="margin:6px 0 13px">
+    Measure the camera you are going to use for the pilot. A different webcam is a
+    different answer, and the answer sets how much gym floor to ask for.
+  </p>
+
+  <div class="stage"><video id="v" autoplay playsinline muted></video><canvas id="o"></canvas></div>
+
+  <div class="legend">
+    <span><i style="background:#5aa9ff"></i>centre column — read your marks here</span>
+    <span><i style="background:#3ddc84"></i>the 4:5 frame the app saves</span>
+    <span><i style="background:#6b7a8d"></i>full sensor frame</span>
+  </div>
+
+  <div class="panel" style="margin-top:14px">
+    <div class="row">
+      <div>
+        <label for="cam">Camera</label>
+        <select id="cam"></select>
+      </div>
+      <div>
+        <label>Resolution it gave us</label>
+        <div style="padding:9px 0"><span class="pill" id="res">waiting for camera…</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div>
+  <div class="panel">
+    <h2>How to measure · 5 minutes</h2>
+    <ol>
+      <li>Tape a tape measure <b>vertically</b> up a wall, zero on the floor. Or tape
+        strips every 100mm and number them.</li>
+      <li>Stand the camera on something solid, lens <b>exactly square to the wall</b> —
+        not tilted up or down. Tilt is the one error that ruins this.</li>
+      <li>Measure the horizontal distance from the <b>lens</b> to the wall and type it
+        in. Anything from 1000mm up works; the maths scales.</li>
+      <li>Read the <b>highest</b> and <b>lowest</b> marks you can see on the blue centre
+        line, and type those in.</li>
+    </ol>
+  </div>
+
+  <div class="panel">
+    <h2>Your readings</h2>
+    <div class="row one">
+      <div>
+        <label for="d">Lens to wall (mm)</label>
+        <input id="d" type="number" inputmode="numeric" value="1500">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="top">Top mark visible (mm)</label>
+        <input id="top" type="number" inputmode="numeric" placeholder="e.g. 1900">
+      </div>
+      <div>
+        <label for="bot">Bottom mark visible (mm)</label>
+        <input id="bot" type="number" inputmode="numeric" placeholder="e.g. 700">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="ph">Tallest person (mm)</label>
+        <input id="ph" type="number" inputmode="numeric" value="2100">
+      </div>
+      <div>
+        <label for="mg">Margin (%)</label>
+        <input id="mg" type="number" inputmode="numeric" value="10">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>What that means</h2>
+    <div class="out" id="out">Type the two readings above.</div>
+    <div class="verdict" id="verdict" hidden></div>
+  </div>
+
+  <div class="panel">
+    <h2>Then check it with a body</h2>
+    <p class="muted" style="margin:0">
+      Move the camera to the distance below, put a person on the mark, and look at the
+      green box. Head and feet inside it with air to spare, or the number is wrong.
+      <b>Trust the body over the arithmetic.</b>
+    </p>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id)
+const v = $('v'), o = $('o'), ctx = o.getContext('2d')
+let stream = null
+
+// ── the camera ─────────────────────────────────────────────────────────────
+async function open(deviceId) {
+  if (stream) stream.getTracks().forEach(t => t.stop())
+  // Ask high and let the driver fall back; a 640x480 negotiation would measure
+  // a crop of the sensor rather than the sensor.
+  const want = { width:{ideal:3840}, height:{ideal:2160}, frameRate:{ideal:30} }
+  if (deviceId) want.deviceId = { exact: deviceId }
+  stream = await navigator.mediaDevices.getUserMedia({ video: want, audio: false })
+  v.srcObject = stream
+  await v.play().catch(() => {})
+  const t = stream.getVideoTracks()[0]
+  const s = t.getSettings ? t.getSettings() : {}
+  $('res').textContent = `${s.width ?? v.videoWidth} × ${s.height ?? v.videoHeight}`
+  await list(t.getSettings ? s.deviceId : null)
+}
+
+async function list(current) {
+  const devices = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput')
+  const sel = $('cam')
+  sel.innerHTML = ''
+  devices.forEach((d, i) => {
+    const op = document.createElement('option')
+    op.value = d.deviceId
+    op.textContent = d.label || `Camera ${i + 1}`
+    if (d.deviceId === current) op.selected = true
+    sel.append(op)
+  })
+  if (!devices.length) sel.innerHTML = '<option>no camera found</option>'
+}
+$('cam').onchange = (e) => open(e.target.value).catch(fail)
+
+function fail(err) {
+  $('res').textContent = 'no camera — ' + (err && err.name ? err.name : 'blocked')
+  $('out').innerHTML = '<span style="color:var(--stop)">The page needs the camera. ' +
+    'Allow it in the address bar, and open this over https or on localhost.</span>'
+}
+
+// ── the overlay ────────────────────────────────────────────────────────────
+// The video is letterboxed inside the stage, so the drawn frame has to follow
+// the letterbox rather than the element, or every line sits in the wrong place.
+function paint() {
+  const r = o.getBoundingClientRect()
+  const dpr = Math.min(window.devicePixelRatio || 1, 2)
+  if (o.width !== Math.round(r.width * dpr)) { o.width = Math.round(r.width * dpr); o.height = Math.round(r.height * dpr) }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, r.width, r.height)
+
+  const vw = v.videoWidth, vh = v.videoHeight
+  if (!vw || !vh) return requestAnimationFrame(paint)
+
+  const scale = Math.min(r.width / vw, r.height / vh)
+  const w = vw * scale, h = vh * scale
+  const x = (r.width - w) / 2, y = (r.height - h) / 2
+
+  ctx.lineWidth = 1.5
+  ctx.strokeStyle = '#6b7a8d'
+  ctx.setLineDash([6, 5])
+  ctx.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5)
+  ctx.setLineDash([])
+
+  // the 4:5 portrait crop the app writes — full height, 0.8 of it wide
+  const cw = Math.min(h * 4 / 5, w), cx = x + (w - cw) / 2
+  ctx.strokeStyle = '#3ddc84'
+  ctx.lineWidth = 2
+  ctx.strokeRect(cx, y + 1, cw, h - 2)
+
+  // the centre column, where the readings are taken
+  ctx.strokeStyle = '#5aa9ff'
+  ctx.lineWidth = 1.5
+  ctx.beginPath(); ctx.moveTo(x + w / 2, y); ctx.lineTo(x + w / 2, y + h); ctx.stroke()
+  ctx.globalAlpha = 0.5
+  ctx.beginPath(); ctx.moveTo(x, y + h / 2); ctx.lineTo(x + w, y + h / 2); ctx.stroke()
+  ctx.globalAlpha = 1
+
+  // ticks up the centre column, so "the top of the frame" is unambiguous
+  ctx.fillStyle = '#5aa9ff'
+  for (const f of [0, 0.25, 0.5, 0.75, 1]) {
+    const ty = y + h * f
+    ctx.fillRect(x + w / 2 - 11, Math.min(Math.max(ty, y), y + h - 2), 22, 2)
+  }
+  requestAnimationFrame(paint)
+}
+
+// ── the arithmetic ─────────────────────────────────────────────────────────
+// Frame height grows linearly with distance, so the distance needed for a
+// person is a ratio and needs no trigonometry at all. The angle is reported
+// only because it is what a spec sheet can be argued with.
+function compute() {
+  const d = +$('d').value, top = +$('top').value, bot = +$('bot').value
+  const person = +$('ph').value || 2100, margin = (+$('mg').value || 0) / 100
+  const out = $('out'), verdict = $('verdict')
+  verdict.hidden = true
+
+  if (!d || !top || !bot || top <= bot) { out.textContent = 'Type the two readings above.'; return }
+
+  const frame = top - bot                       // mm of wall the lens sees at d
+  const k = frame / d                           // = 2·tan(V/2)
+  const V = 2 * Math.atan(k / 2) * 180 / Math.PI
+  const need = person * (1 + margin)            // frame height we want
+  const dist = Math.round(need / k)             // = d · need / frame
+  const tight = Math.round(person / k)          // head and toes exactly on the edge
+  const at2600 = Math.round(2600 * k)
+  const crop = Math.round(need * 4 / 5)         // 4:5 output width at that distance
+  const vw = v.videoWidth, vh = v.videoHeight
+  const kh = vh ? k * (vw / vh) : 0             // horizontal, from the aspect ratio
+  const wide = Math.round(dist * kh)
+
+  out.innerHTML = `
+    <div><span class="k">frame height at ${d}mm</span><b>${frame}mm</b></div>
+    <div><span class="k">vertical field of view</span><b>${V.toFixed(1)}°</b></div>
+    <div><span class="k">frame height at 2600mm</span><b>${at2600}mm</b></div>
+    <div><span class="k">bare fit for ${person}mm</span><b>${tight}mm</b></div>
+    <div><span class="k">with ${Math.round(margin * 100)}% margin</span><b>${dist}mm</b> &nbsp;← camera_distance</div>
+    <div><span class="k">4:5 photo is then</span><b>${crop}mm</b> wide</div>
+    ${kh ? `<div><span class="k">full preview is then</span><b>${wide}mm</b> wide</div>` : ''}
+    <div><span class="k">bay depth, +800 to wall</span><b>${dist + 800}mm</b></div>`
+
+  const fits2600 = at2600 >= person
+  if (dist <= 2600) {
+    verdict.className = 'verdict go'
+    verdict.innerHTML = `<b>2600mm is enough.</b> You need ${dist}mm, so the design holds and
+      the bay stays ${(2500 * (dist + 800) / 1e6).toFixed(2)}m² or less.`
+  } else if (fits2600) {
+    verdict.className = 'verdict warn'
+    verdict.innerHTML = `<b>2600mm fits a ${person}mm person, but only just</b> — ${at2600 - person}mm
+      of air in total. Move to <b>${dist}mm</b> for a real margin. That is a bay
+      ${dist + 800}mm deep, about ${(2500 * (dist + 800) / 1e6).toFixed(2)}m² of gym floor.`
+  } else {
+    verdict.className = 'verdict stop'
+    verdict.innerHTML = `<b>2600mm crops a ${person}mm person by ${person - at2600}mm.</b>
+      The camera has to go back to <b>${dist}mm</b>, making the bay ${dist + 800}mm deep —
+      about ${(2500 * (dist + 800) / 1e6).toFixed(2)}m² of gym floor to ask for.
+      Change <code>camera_distance</code> in the OpenSCAD file to ${dist}.`
+  }
+  verdict.hidden = false
+}
+for (const id of ['d', 'top', 'bot', 'ph', 'mg']) $(id).addEventListener('input', compute)
+
+open().catch(fail)
+paint()
+compute()
+window.__fov = { compute, open }   // for the test harness
+</script>
