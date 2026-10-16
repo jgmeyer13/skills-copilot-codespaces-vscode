@@ -10,12 +10,19 @@
  * line break printing literally as asterisks.
  *
  *   node tools/make-pdf.mjs POPIA-PACK.md "POPIA review pack"
+ *
+ * Fenced blocks survive unwrapping, because a brief whose job is to hand
+ * someone a prompt to paste is worthless if the prompt arrives as one long
+ * paragraph. An info string becomes a class: ```prompt is tinted differently
+ * from ```scad, so a reader can see at a glance what to copy and what to read.
  */
 import { chromium } from '@playwright/test'
 import { readFile, writeFile } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
 
 const [src, title = 'Document', footnote = 'not legal advice'] = process.argv.slice(2)
 const raw = await readFile(src, 'utf8')
+const src0 = src
 
 // ── unwrap ─────────────────────────────────────────────────────────────────
 // One logical block per line, so every inline marker is closed on the line it
@@ -30,14 +37,20 @@ const isNumber = (l) => /^\s*\d+\.\s/.test(l)
 // A whole line that is nothing but a bold run is a lead-in, not the first
 // line of the paragraph under it.
 const isLeadIn = (l) => /^\*\*[^*]+\*\*$/.test(l.trim())
-const starts = (l) => isHeading(l) || isRule(l) || isTable(l) || isQuote(l) || isBullet(l) || isNumber(l) || isLeadIn(l)
+const isFence = (l) => /^```/.test(l.trim())
+const isImage = (l) => /^!\[[^\]]*\]\([^)]+\)$/.test(l.trim())
+const starts = (l) => isHeading(l) || isRule(l) || isTable(l) || isQuote(l) || isBullet(l) || isNumber(l) || isLeadIn(l) || isImage(l)
 
 function unwrap(text) {
   const out = []
   let buf = null
+  let fenced = false
   const flush = () => { if (buf !== null) { out.push(buf); buf = null } }
 
   for (const line of text.split('\n')) {
+    if (isFence(line)) { flush(); out.push(line.trim()); fenced = !fenced; continue }
+    // Inside a fence every line is content, blank ones included.
+    if (fenced) { out.push(line); continue }
     if (!line.trim()) { flush(); out.push(''); continue }
     if (starts(line)) {
       flush()
@@ -84,6 +97,32 @@ function blocks(lines) {
     if (isQuote(l)) { flushList(); quote.push(l.replace(/^>\s?/, '')); i++; continue }
     flushQuote()
 
+    if (isFence(l)) {
+      flushList()
+      const kind = l.trim().slice(3).trim().toLowerCase()
+      const code = []
+      i++
+      while (i < lines.length && !isFence(lines[i])) { code.push(lines[i]); i++ }
+      i++ // the closing fence
+      while (code.length && !code[code.length - 1].trim()) code.pop()
+      const cls = /^[a-z]+$/.test(kind) ? ` class="${kind}"` : ''
+      out.push(`<pre${cls}>${esc(code.join('\n'))}</pre>`)
+      continue
+    }
+
+    if (isImage(l)) {
+      flushList()
+      const [, alt, src] = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(l.trim())
+      // The HTML is written to a temp file, so a path relative to the markdown
+      // would resolve against /tmp and silently render as a broken-image box.
+      const href = /^(https?:|file:|data:)/.test(src) ? src : 'file://' + resolve(dirname(src0), src)
+      out.push(
+        `<figure><img src="${esc(href)}"/>${alt ? `<figcaption>${inline(alt)}</figcaption>` : ''}</figure>`,
+      )
+      i++
+      continue
+    }
+
     if (isTable(l) && lines[i + 1] && /^\|[-\s|:]+\|?$/.test(lines[i + 1].trim())) {
       flushList()
       const cells = (row) => row.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim())
@@ -92,8 +131,9 @@ function blocks(lines) {
       const body = []
       while (i < lines.length && isTable(lines[i])) { body.push(cells(lines[i])); i++ }
       const hasHead = head.some((c) => c !== '')
+      const cls = head.length === 2 ? ' class="pair"' : ''
       out.push(
-        `<table>${hasHead ? `<thead><tr>${head.map((c) => `<th>${inline(c)}</th>`).join('')}</tr></thead>` : ''}` +
+        `<table${cls}>${hasHead ? `<thead><tr>${head.map((c) => `<th>${inline(c)}</th>`).join('')}</tr></thead>` : ''}` +
           `<tbody>${body.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`,
       )
       continue
@@ -153,12 +193,24 @@ const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(titl
   th { text-align: left; border-bottom: 1pt solid #15191f; padding: 4pt 8pt 4pt 0; vertical-align: top; }
   td { border-bottom: 0.5pt solid #d8dde3; padding: 6pt 8pt 6pt 0; vertical-align: top; }
   td:first-child { font-weight: 650; width: 27%; }
+  table.pair td:first-child { width: 36%; }
   blockquote { margin: 0 0 11pt; padding: 10pt 14pt 3pt; background: #f4f6f8; border-left: 2.5pt solid #9aa7b8; }
   blockquote p { margin: 0 0 6pt; font-size: 10pt; }
   blockquote h3 { margin: 10pt 0 4pt; font-size: 10pt; }
   blockquote ul { margin-bottom: 6pt; }
   code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9pt; background: #eef1f4; padding: 1pt 3pt; border-radius: 2pt; }
   strong { font-weight: 680; }
+  pre {
+    font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9pt; line-height: 1.4;
+    white-space: pre-wrap; background: #f4f6f8; border: 0.5pt solid #d8dde3;
+    border-left: 2.5pt solid #9aa7b8; padding: 9pt 11pt; margin: 2pt 0 12pt; border-radius: 2pt;
+  }
+  /* A block to copy, not to read — tinted so it is findable by flicking pages. */
+  pre.prompt { background: #fdf8ee; border-color: #e8d9b4; border-left-color: #c8912c; }
+  pre.scad, pre.bash { background: #f1f4f7; }
+  figure { margin: 4pt 0 13pt; text-align: center; page-break-inside: avoid; }
+  figure img { max-width: 100%; border: 0.5pt solid #c8ced6; border-radius: 2pt; }
+  figcaption { font-size: 8.5pt; color: #6b7684; margin-top: 5pt; text-align: left; }
   ul.tasks { list-style: none; padding-left: 2pt; }
   ul.tasks li { margin-bottom: 7pt; padding-left: 20pt; text-indent: -20pt; }
   .box {
