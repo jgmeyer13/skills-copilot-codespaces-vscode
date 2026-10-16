@@ -392,6 +392,7 @@ table.log td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); color
 .langs button {
   font-size: 13px; padding: 7px 14px; border-radius: 9px;
   border: 1px solid var(--edge); color: var(--text-3);
+  min-height: 44px; min-width: 44px;
 }
 .langs button[aria-pressed='true'] { background: var(--surface-2); color: var(--text); }
 
@@ -723,10 +724,12 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
  * before it goes, and reports back what actually went.
  */
 
+/* Underlined text that is also a target. The underline is the affordance;
+   the padding is what a thumb lands on. */
 .linkbtn {
-  background: none; border: 0; padding: 6px 0; color: var(--text-2);
+  background: none; border: 0; padding: 12px 0; color: var(--text-2);
   font: inherit; font-size: 14px; text-decoration: underline;
-  text-underline-offset: 3px; cursor: pointer;
+  text-underline-offset: 3px; cursor: pointer; min-height: 44px;
 }
 .linkbtn:hover { color: var(--text); }
 

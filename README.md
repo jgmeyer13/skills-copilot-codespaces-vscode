@@ -87,6 +87,7 @@ node tools/test-rig.mjs        # the camera lock and the light drift, in stops
 node tools/test-changes.mjs    # the mid-pilot change detector
 node tools/test-setup.mjs      # the rig screen in a browser, on a camera that cannot lock everything
 node tools/test-compare.mjs    # the flip, the timeline and the card
+node tools/test-phone.mjs      # three phone viewports: layout, thumb targets, the overlay mapping
 node tools/test-mirror.mjs     # the same maths reaching the screen, in a real browser
 node tools/test-report.mjs     # the console's arithmetic — daily counts, rates, pods, splits
 node tools/test-readiness.mjs  # the preflight checks and the pre-registration lock
