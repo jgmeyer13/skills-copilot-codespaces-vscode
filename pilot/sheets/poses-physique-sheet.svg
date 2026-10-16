@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="174mm" height="236mm" viewBox="0 0 174 236">
+  <rect width="174" height="236" fill="#ffffff"/>
+  
+  <text x="0" y="9" font-size="7" font-weight="700" fill="#2b3440">PODIUM — Physique</text>
+  <text x="0" y="16" font-size="3.4" fill="#6b7684">Front double biceps, side chest, back double biceps</text>
+  <text x="0" y="22" font-size="3.2" fill="#6b7684">Tape this where the operator can see it. The words are the ones on screen — do not improvise new ones, they</text>
+  <text x="0" y="26.2" font-size="3.2" fill="#6b7684">are part of the measurement.</text>
+  
+  <g>
+    <rect x="0" y="30" width="174" height="36.4" fill="none" stroke="#c8ced6" stroke-width="0.4" rx="2"/>
+    <text x="170" y="37" font-size="3.4" font-weight="700" fill="#6b7684" text-anchor="end">1</text>
+    <svg x="5" y="34.5" width="16.11764705882353" height="27.4" viewBox="0 0 100 170" aria-hidden="true" fill="none" stroke="#2b3440" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="20" r="11" /><polyline points="50,33 50,95" /><polyline points="50,44 34,70 30,95" /><polyline points="50,44 66,70 70,95" /><polyline points="50,95 38,125 36,155" /><polyline points="50,95 62,125 64,155" /></svg>
+    <text x="27.11764705882353" y="43" font-size="6" font-weight="700" fill="#2b3440">Stand on the mark</text>
+    <text x="27.11764705882353" y="52" font-size="3.6" fill="#2b3440">Arms relaxed by your side, feet on the ring, look at the camera.</text>
+    <text x="27.11764705882353" y="61.400000000000006" font-size="3" fill="#6b7684">7 seconds · the one that has to match every visit</text>
+  </g>
+
+  <g>
+    <rect x="0" y="70.4" width="174" height="36.4" fill="none" stroke="#c8ced6" stroke-width="0.4" rx="2"/>
+    <text x="170" y="77.4" font-size="3.4" font-weight="700" fill="#6b7684" text-anchor="end">2</text>
+    <svg x="5" y="74.9" width="16.11764705882353" height="27.4" viewBox="0 0 100 170" aria-hidden="true" fill="none" stroke="#2b3440" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="24" r="11" /><polyline points="50,37 50,97" /><polyline points="50,46 24,52 31,24" /><polyline points="50,46 76,52 69,24" /><polyline points="50,97 38,126 36,155" /><polyline points="50,97 62,126 64,155" /></svg>
+    <text x="27.11764705882353" y="83.4" font-size="6" font-weight="700" fill="#2b3440">Front double biceps</text>
+    <text x="27.11764705882353" y="92.4" font-size="3.6" fill="#2b3440">Arms up and out, wrists curled in. Breathe out.</text>
+    <text x="27.11764705882353" y="101.80000000000001" font-size="3" fill="#6b7684">7 seconds</text>
+  </g>
+
+  <g>
+    <rect x="0" y="110.8" width="174" height="36.4" fill="none" stroke="#c8ced6" stroke-width="0.4" rx="2"/>
+    <text x="170" y="117.8" font-size="3.4" font-weight="700" fill="#6b7684" text-anchor="end">3</text>
+    <svg x="5" y="115.3" width="16.11764705882353" height="27.4" viewBox="0 0 100 170" aria-hidden="true" fill="none" stroke="#2b3440" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="54" cy="22" r="11" /><polyline points="52,35 50,96" /><polyline points="51,46 66,62 38,66" /><polyline points="51,48 60,78 58,96" /><polyline points="50,96 42,126 40,155" /><polyline points="50,96 58,126 60,155" /></svg>
+    <text x="27.11764705882353" y="123.8" font-size="6" font-weight="700" fill="#2b3440">Side chest</text>
+    <text x="27.11764705882353" y="132.8" font-size="3.6" fill="#2b3440">Turn to your right. Near arm across, press the chest forward.</text>
+    <text x="27.11764705882353" y="142.2" font-size="3" fill="#6b7684">6 seconds</text>
+  </g>
+
+  <g>
+    <rect x="0" y="151.2" width="174" height="36.4" fill="none" stroke="#c8ced6" stroke-width="0.4" rx="2"/>
+    <text x="170" y="158.2" font-size="3.4" font-weight="700" fill="#6b7684" text-anchor="end">4</text>
+    <svg x="5" y="155.7" width="16.11764705882353" height="27.4" viewBox="0 0 100 170" aria-hidden="true" fill="none" stroke="#2b3440" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="24" r="11" /><polyline points="50,37 50,97" /><polyline points="50,46 22,50 30,26" /><polyline points="50,46 78,50 70,26" /><polyline points="50,97 38,126 36,155" /><polyline points="50,97 62,126 64,155" /></svg>
+    <text x="27.11764705882353" y="164.2" font-size="6" font-weight="700" fill="#2b3440">Back double biceps</text>
+    <text x="27.11764705882353" y="173.2" font-size="3.6" fill="#2b3440">Turn around. Elbows up, squeeze the shoulder blades.</text>
+    <text x="27.11764705882353" y="182.6" font-size="3" fill="#6b7684">6 seconds</text>
+  </g>
+
+  <g>
+    <rect x="0" y="191.6" width="174" height="36.4" fill="none" stroke="#c8ced6" stroke-width="0.4" rx="2"/>
+    <text x="170" y="198.6" font-size="3.4" font-weight="700" fill="#6b7684" text-anchor="end">5</text>
+    <svg x="5" y="196.1" width="16.11764705882353" height="27.4" viewBox="0 0 100 170" aria-hidden="true" fill="none" stroke="#2b3440" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="44" cy="22" r="11" /><polyline points="46,35 52,95" /><polyline points="47,46 28,38 22,18" /><polyline points="47,48 68,66 74,86" /><polyline points="52,95 40,124 34,153" /><polyline points="52,95 66,122 72,150" /></svg>
+    <text x="27.11764705882353" y="204.6" font-size="6" font-weight="700" fill="#2b3440">However you like</text>
+    <text x="27.11764705882353" y="213.6" font-size="3.6" fill="#2b3440">Move. Mess about. This one is for the post.</text>
+    <text x="27.11764705882353" y="223" font-size="3" fill="#6b7684">4 seconds</text>
+  </g>
+  <text x="0" y="234.5" font-size="2.8" fill="#6b7684">Generated from config.json · if a cue changes in the app, print this again</text>
+</svg>

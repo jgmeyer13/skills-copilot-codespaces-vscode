@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="174mm" height="236mm" viewBox="0 0 174 236">
+  <rect width="174" height="236" fill="#ffffff"/>
+  
+  <text x="0" y="8" font-size="7" font-weight="700" fill="#2b3440">PODIUM — what changed, and when</text>
+  <text x="0" y="14.5" font-size="3.2" fill="#6b7684">One change at a time. If you change the light, the price, the script or the poses, the metric it</text>
+  <text x="0" y="19" font-size="3.2" fill="#6b7684">affects restarts from that date — and a pilot with an unwritten change in it is four weeks of nothing.</text>
+  <text x="1" y="30" font-size="2.6" font-weight="600" fill="#6b7684">DATE</text>
+  <text x="21" y="30" font-size="2.6" font-weight="600" fill="#6b7684">WHAT CHANGED</text>
+  <line x1="20" y1="32" x2="20" y2="208" stroke="#c8ced6" stroke-width="0.25"/>
+  <text x="85" y="30" font-size="2.6" font-weight="600" fill="#6b7684">WHY</text>
+  <line x1="84" y1="32" x2="84" y2="208" stroke="#c8ced6" stroke-width="0.25"/>
+  <text x="129" y="30" font-size="2.6" font-weight="600" fill="#6b7684">WHICH NUMBER RESTARTS</text>
+  <line x1="128" y1="32" x2="128" y2="208" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="32" x2="174" y2="32" stroke="#2b3440" stroke-width="0.5"/>
+  <line x1="0" y1="43" x2="174" y2="43" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="54" x2="174" y2="54" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="65" x2="174" y2="65" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="76" x2="174" y2="76" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="87" x2="174" y2="87" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="98" x2="174" y2="98" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="109" x2="174" y2="109" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="120" x2="174" y2="120" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="131" x2="174" y2="131" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="142" x2="174" y2="142" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="153" x2="174" y2="153" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="164" x2="174" y2="164" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="175" x2="174" y2="175" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="186" x2="174" y2="186" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="197" x2="174" y2="197" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="208" x2="174" y2="208" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="0" y1="32" x2="0" y2="208" stroke="#c8ced6" stroke-width="0.25"/>
+  <line x1="174" y1="32" x2="174" y2="208" stroke="#c8ced6" stroke-width="0.25"/>
+  <text x="0" y="222" font-size="3.2" font-weight="600" fill="#2b3440">Changes that do NOT need a line here:</text>
+  <text x="0" y="228" font-size="2.9" fill="#6b7684">Anything that cannot reach a member or a measurement — a typo on the operator screen, a note you wrote,</text>
+  <text x="0" y="232.5" font-size="2.9" fill="#6b7684">clearing demo rows. If you are not sure whether it counts, write it down. The log costs a line; the doubt costs the pilot.</text>
+</svg>

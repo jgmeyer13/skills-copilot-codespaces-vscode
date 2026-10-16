@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="174mm" height="236mm" viewBox="0 0 174 236">
+  <rect width="174" height="236" fill="#ffffff"/>
+  
+  <text x="0" y="8" font-size="7" font-weight="700" fill="#2b3440">PODIUM — what a member sees</text>
+  <text x="0" y="14.5" font-size="3.2" fill="#6b7684">Draw each one from memory, without opening the app. The box you cannot fill in is the finding.</text>
+  
+  <g>
+    <rect x="0" y="22" width="84" height="50" fill="none" stroke="#c8ced6" stroke-width="0.4" rx="2"/>
+    <text x="3" y="29" font-size="3.8" font-weight="700" fill="#2b3440">1 · Walks up</text>
+    <text x="3" y="34.5" font-size="2.8" fill="#6b7684">What makes them stop?</text>
+    <line x1="3" y1="68" x2="81" y2="68" stroke="#c8ced6" stroke-width="0.25"/>
+  </g>
+  <g>
+    <rect x="90" y="22" width="84" height="50" fill="none" stroke="#c8ced6" stroke-width="0.4" rx="2"/>
+    <text x="93" y="29" font-size="3.8" font-weight="700" fill="#2b3440">2 · Check in</text>
+    <text x="93" y="34.5" font-size="2.8" fill="#6b7684">What do they type, and what do they think it is for?</text>
+    <line x1="93" y1="68" x2="171" y2="68" stroke="#c8ced6" stroke-width="0.25"/>
+  </g>
+  <g>
+    <rect x="0" y="76" width="84" height="50" fill="none" stroke="#c8ced6" stroke-width="0.4" rx="2"/>
+    <text x="3" y="83" font-size="3.8" font-weight="700" fill="#2b3440">3 · Consent</text>
+    <text x="3" y="88.5" font-size="2.8" fill="#6b7684">Three lines. Do they read them?</text>
+    <line x1="3" y1="122" x2="81" y2="122" stroke="#c8ced6" stroke-width="0.25"/>
+  </g>
+  <g>
+    <rect x="90" y="76" width="84" height="50" fill="none" stroke="#c8ced6" stroke-width="0.4" rx="2"/>
+    <text x="93" y="83" font-size="3.8" font-weight="700" fill="#2b3440">4 · Pose choice</text>
+    <text x="93" y="88.5" font-size="2.8" fill="#6b7684">Physique or Athlete. Do they know which they are?</text>
+    <line x1="93" y1="122" x2="171" y2="122" stroke="#c8ced6" stroke-width="0.25"/>
+  </g>
+  <g>
+    <rect x="0" y="130" width="84" height="50" fill="none" stroke="#c8ced6" stroke-width="0.4" rx="2"/>
+    <text x="3" y="137" font-size="3.8" font-weight="700" fill="#2b3440">5 · The mirror</text>
+    <text x="3" y="142.5" font-size="2.8" fill="#6b7684">Standing on the mark. What are they looking at?</text>
+    <line x1="3" y1="176" x2="81" y2="176" stroke="#c8ced6" stroke-width="0.25"/>
+  </g>
+  <g>
+    <rect x="90" y="130" width="84" height="50" fill="none" stroke="#c8ced6" stroke-width="0.4" rx="2"/>
+    <text x="93" y="137" font-size="3.8" font-weight="700" fill="#2b3440">6 · Thirty seconds</text>
+    <text x="93" y="142.5" font-size="2.8" fill="#6b7684">Three poses and a candid. Where do their eyes go?</text>
+    <line x1="93" y1="176" x2="171" y2="176" stroke="#c8ced6" stroke-width="0.25"/>
+  </g>
+  <g>
+    <rect x="0" y="184" width="84" height="50" fill="none" stroke="#c8ced6" stroke-width="0.4" rx="2"/>
+    <text x="3" y="191" font-size="3.8" font-weight="700" fill="#2b3440">7 · Review</text>
+    <text x="3" y="196.5" font-size="2.8" fill="#6b7684">Five photos. Which do they reach for first?</text>
+    <line x1="3" y1="230" x2="81" y2="230" stroke="#c8ced6" stroke-width="0.25"/>
+  </g>
+  <g>
+    <rect x="90" y="184" width="84" height="50" fill="none" stroke="#c8ced6" stroke-width="0.4" rx="2"/>
+    <text x="93" y="191" font-size="3.8" font-weight="700" fill="#2b3440">8 · Walking away</text>
+    <text x="93" y="196.5" font-size="2.8" fill="#6b7684">What do they say to the person they came with?</text>
+    <line x1="93" y1="230" x2="171" y2="230" stroke="#c8ced6" stroke-width="0.25"/>
+  </g>
+  <text x="0" y="233" font-size="2.8" fill="#6b7684">Then: which box has the most people leaving? The operator console counts it — guess first, then look.</text>
+</svg>
