@@ -26,7 +26,7 @@ import { createCapture } from './src/capture.js'
 import { newSession, closeSession, summarise, verdict, toCsv, resolutionTier } from './src/telemetry.js'
 import { L } from './src/scoring.js'
 import { silhouette } from './src/silhouettes.js'
-import { alignment, createLock } from './src/align.js'
+import { alignment, createLock, createCue } from './src/align.js'
 import { readiness, worstState, rulesFingerprint } from './src/readiness.js'
 import { registration, pixelMatrix } from './src/registration.js'
 import * as changes from './src/changes.js'
@@ -36,6 +36,9 @@ import { barChart, lineChart, funnelChart, splitBar, PALETTE } from './src/chart
 import { writeUp } from './src/writeup.js'
 
 const $ = (id) => document.getElementById(id)
+/* A no-op write still invalidates the node, and on mobile Safari rewriting a
+   button mid-tap abandons the click. Write only when it changed. */
+const setText = (el, value) => { if (el.textContent !== value) el.textContent = value }
 const app = $('app')
 
 const state = {
@@ -792,6 +795,7 @@ function startPreview() {
   const ctx = canvas.getContext('2d')
   const pose = () => state.poseOverride ?? state.pose
   lock.reset()
+  cueHold.reset()
 
   const loop = (now) => {
     if (state.screen !== 'ready') { startPreview.raf = requestAnimationFrame(loop); return }
@@ -810,9 +814,9 @@ function startPreview() {
     const badge = $('ready-badge')
     const ok = people.length === state.people
     badge.classList.toggle('good', ok)
-    $('ready-badge-text').textContent = ok
+    setText($('ready-badge-text'), ok
       ? people.length === 1 ? 'Got you' : `Got all ${people.length}`
-      : people.length === 0 ? 'Step into frame' : `${people.length} of ${state.people} in frame`
+      : people.length === 0 ? 'Step into frame' : `${people.length} of ${state.people} in frame`)
 
     for (const lm of people) drawSkeleton(ctx, lm, box, 'rgba(61,220,132,0.78)', 3)
 
@@ -846,6 +850,26 @@ function startPreview() {
  * able to take their photographs. Alignment is advice, and advice that locks
  * the door is not advice.
  */
+/*
+ * Written only when it changes.
+ *
+ * This ran on every animation frame, rewriting the cue and the Start button's
+ * label sixty times a second. Two things came of that on a real phone, and
+ * the second one is why the screen was unusable:
+ *
+ *   The text appeared doubled. A photograph of the screen caught two
+ *   instructions composited on top of each other, because the panel was
+ *   being repainted mid-refresh with different words each time.
+ *
+ *   Start stopped working. Rewriting a button's textContent between
+ *   touchstart and touchend makes mobile Safari abandon the click, so the
+ *   one escape hatch on the screen — "Start anyway" — did nothing, every
+ *   time, on the device where it mattered most.
+ *
+ * The guard is three lines. Everything else here is the same.
+ */
+const cueHold = createCue()
+
 function paintAlign(a, held) {
   const cue = $('align-cue')
   const meter = $('align-meter')
@@ -853,7 +877,8 @@ function paintAlign(a, held) {
   const stage = document.querySelector('.screen[data-id="ready"] .stage')
 
   if (!a) {
-    cue.textContent = state.people > 1 ? 'Everyone in frame, roughly in a line' : ''
+    cueHold.reset()
+    setText(cue, state.people > 1 ? 'Everyone in frame, roughly in a line' : '')
     meter.hidden = true
     stage.classList.remove('locked')
     return
@@ -865,12 +890,15 @@ function paintAlign(a, held) {
 
   const isLocked = held?.locked
   stage.classList.toggle('locked', !!isLocked)
-  cue.textContent = isLocked
-    ? (a.hasReference ? 'Lined up with last time' : 'Good — hold it there')
-    : a.cue
+  setText(
+    cue,
+    isLocked
+      ? (a.hasReference ? 'Lined up with last time' : 'Good — hold it there')
+      : cueHold.update(a, performance.now()),
+  )
   cue.classList.toggle('good', !!isLocked)
 
-  $('begin').textContent = isLocked ? 'Start · 30 seconds' : 'Start anyway · 30 seconds'
+  setText($('begin'), isLocked ? 'Start · 30 seconds' : 'Start anyway · 30 seconds')
 }
 
 /**
@@ -1111,23 +1139,38 @@ async function runCapture() {
       }
     },
     onTick: ({ into, step, people, best }) => {
-      $('cap-count').textContent = Math.max(1, Math.ceil(step.seconds - into))
+      setText($('cap-count'), String(Math.max(1, Math.ceil(step.seconds - into))))
       // A bar reads at a glance from the mark; a number has to be focused on.
       $('cap-bar').style.width = `${Math.min(100, (into / step.seconds) * 100).toFixed(1)}%`
       const badge = $('cap-badge')
       const ok = people === state.people
       badge.classList.toggle('good', ok && best > 0.6)
-      $('cap-badge-text').textContent = !ok
+      setText($('cap-badge-text'), !ok
         ? people === 0 ? 'Nobody in frame' : `${people} of ${state.people}`
-        : best > 0.75 ? 'Got it' : best > 0.5 ? 'Hold it' : 'Adjust'
+        : best > 0.75 ? 'Got it' : best > 0.5 ? 'Hold it' : 'Adjust')
     },
   })
 
   const { frames: results, meanConfidence } = await capture.run()
   capture = null
-  state.session.meanConfidence = meanConfidence
   video.style.display = 'none'
   document.querySelector('.screen[data-id="ready"] .stage').insertBefore(video, $('overlay'))
+
+  /*
+   * Stopping mid-capture is a race, and it threw.
+   *
+   * abort() resolves run() and the Stop handler calls reset(), which clears
+   * the session. Whichever lands first, this function then resumed on a
+   * session that was no longer there and died on the next line — so every
+   * member who changed their mind halfway through left an unhandled error
+   * behind, and the screen they returned to was built by a reset that had
+   * already finished.
+   *
+   * Nothing to do here: Stop has already cleaned up and said so.
+   */
+  if (!state.session) return
+
+  state.session.meanConfidence = meanConfidence
 
   if (!results.length) {
     banner('Nothing was captured — was anyone in frame?', 5000)

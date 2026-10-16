@@ -168,25 +168,99 @@ export function alignment(live, ref, { lockAt = 0.82 } = {}) {
   const score = clamp01(Math.pow(worst, 0.65) * Math.pow(mean, 0.35))
 
   let cue = null
+  let cueAxis = null
   if (!feetVisible) {
     cue = 'Step back — we need your feet in shot'
+    cueAxis = 'feet'
   } else {
     let worstAxis = null
     for (const c of CUES) {
       if (scores[c.axis] >= 1) continue
       if (!worstAxis || scores[c.axis] < scores[worstAxis.axis]) worstAxis = c
     }
-    if (worstAxis) cue = d[worstAxis.axis] > 0 ? worstAxis.over : worstAxis.under
+    if (worstAxis) {
+      cue = d[worstAxis.axis] > 0 ? worstAxis.over : worstAxis.under
+      cueAxis = worstAxis.axis
+    }
   }
 
   return {
     score,
     locked: score >= lockAt,
     cue: cue ?? (hasReference ? 'Lined up with last time' : 'Good — hold it there'),
+    // Which axis the instruction came from. The caller needs it to decide
+    // whether a NEW instruction is worth interrupting the current one with;
+    // without it, two near-equal axes swap every frame.
+    cueAxis,
     deltas: d,
     scores,
     hasReference,
     feetVisible,
+  }
+}
+
+/**
+ * One instruction at a time, held long enough to act on.
+ *
+ * `alignment()` is memoryless: it answers "what is worst RIGHT NOW", sixty
+ * times a second. When two axes score within a hair of each other it names
+ * them alternately, and `feetVisible` — a boolean, computed from landmarks
+ * at the edge of frame — flickers on its own. The result on a real phone was
+ * the instruction changing on nearly every frame: "step back, we need your
+ * feet" and "square your shoulders up" alternating faster than anyone can
+ * read, let alone obey. A member stands there being shouted contradictory
+ * orders and the lock never closes, because they never finish doing one
+ * thing before being told to do another.
+ *
+ * So: an instruction is kept for `dwellMs` before anything may replace it,
+ * and after that it is only replaced by something MEANINGFULLY worse —
+ * `margin` worse — rather than by a rounding difference.
+ *
+ * Two things override the dwell, both because waiting would be a lie:
+ * praise when they get there, and an empty frame when they walk away. Those
+ * are not corrections, and holding a correction over them would be telling
+ * someone to step left after they have already left the room.
+ */
+export function createCue({ dwellMs = 1200, margin = 0.08 } = {}) {
+  let text = null
+  let axis = null
+  let since = 0
+
+  const adopt = (a, now) => {
+    text = a.cue
+    axis = a.cueAxis
+    since = now
+    return text
+  }
+
+  return {
+    update(a, now) {
+      if (!a) { text = null; axis = null; return '' }
+
+      // No correction to give: they are lined up, or there is nobody there.
+      if (a.cueAxis === null) return adopt(a, now)
+
+      if (text === null) return adopt(a, now)
+      if (a.cue === text) { axis = a.cueAxis; return text }
+
+      // The thing we are still nagging about has been fixed. Move on at once;
+      // repeating a solved instruction is how a member stops believing it.
+      const currentScore = axis && a.scores ? a.scores[axis] : undefined
+      if (axis !== 'feet' && currentScore !== undefined && currentScore >= 1) return adopt(a, now)
+
+      if (now - since < dwellMs) return text
+
+      // Past the dwell: swap only for something clearly worse.
+      const nextScore = a.cueAxis === 'feet' ? 0 : a.scores?.[a.cueAxis]
+      const nowScore = axis === 'feet' ? 0 : currentScore
+      if (nowScore === undefined || nextScore === undefined) return adopt(a, now)
+      if (nextScore < nowScore - margin) return adopt(a, now)
+
+      since = now   // still the same problem; restart the clock, keep the words
+      return text
+    },
+    reset() { text = null; axis = null; since = 0 },
+    get current() { return text },
   }
 }
 

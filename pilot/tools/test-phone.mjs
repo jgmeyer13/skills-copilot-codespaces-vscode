@@ -183,6 +183,30 @@ for (const name of ['iPhone SE', 'iPhone 13', 'Pixel 7']) {
     !mapping.cropped || Math.abs(mapping.nearEdge - mapping.naive) > 20,
     `${Math.round(mapping.nearEdge)} vs the old ${Math.round(mapping.naive)}`)
 
+  /*
+   * The one escape hatch on the screen, and on a real phone it did nothing.
+   *
+   * paintAlign rewrote the button's textContent on every animation frame, and
+   * rewriting a button between touchstart and touchend makes mobile Safari
+   * abandon the click. It worked on a laptop because a mouse click is one
+   * event, not two.
+   */
+  await page.evaluate(() => { window.__pilot.config.capture.prerollSeconds = 0 })
+  const labelWrites = await page.evaluate(() => new Promise((done) => {
+    // Count how often the label is actually touched over a second of frames.
+    let writes = 0
+    const el = document.getElementById('begin')
+    new MutationObserver((m) => { writes += m.length }).observe(el, { childList: true, characterData: true, subtree: true })
+    setTimeout(() => done(writes), 1000)
+  }))
+  check('the Start label is not rewritten every frame', labelWrites < 5, `${labelWrites} writes in a second`)
+
+  await page.locator('#begin').tap()
+  await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'capture', null, { timeout: 20000 })
+  check('Start actually starts, from a tap', true)
+  await page.locator('#cap-abort').tap()
+  await page.waitForFunction(() => document.getElementById('app').dataset.screen === 'attract', null, { timeout: 15000 })
+
   check('no console errors on the way through', errors.length === 0, errors.slice(0, 2).join(' | '))
   await context.close()
 }

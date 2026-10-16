@@ -3,7 +3,7 @@
  *
  *   node tools/test-align.mjs
  */
-import { alignment, deltas, createLock, TOLERANCE } from '../src/align.js'
+import { alignment, deltas, createLock, createCue, TOLERANCE } from '../src/align.js'
 import { skeleton, POSE_SHAPE } from './skeletons.mjs'
 
 let failed = 0
@@ -75,6 +75,82 @@ check('still not locked halfway through the hold', !lock.update(0.95, 1350).lock
 check('locked once it has been held', lock.update(0.95, 1750).locked)
 lock.update(0.2, 1800)
 check('dropping out resets the hold', !lock.update(0.95, 1900).locked)
+
+
+// ── one instruction at a time, held long enough to act on ─────────────────
+//
+// Found on a real phone: the cue changed on nearly every frame, so a member
+// got "step back, we need your feet" and "square your shoulders up"
+// alternating faster than anyone can read. They never finish doing one thing
+// before being told another, so the lock never closes.
+
+{
+  const cueFor = (axis, text, scores) => ({ cue: text, cueAxis: axis, scores })
+  const even = { scale: 0.60, dx: 0.62, dy: 1, turn: 1 }
+
+  const hold = createCue({ dwellMs: 1000, margin: 0.08 })
+
+  check('the first instruction is taken at once',
+    hold.update(cueFor('scale', 'Come forward a little', even), 0) === 'Come forward a little')
+
+  // dx is worse by 0.02 — a rounding difference, not a new problem.
+  check('a near-equal axis does not steal the instruction',
+    hold.update(cueFor('dx', 'Step left', { ...even, dx: 0.58 }), 100) === 'Come forward a little')
+
+  check('and still does not, a second later',
+    hold.update(cueFor('dx', 'Step left', { ...even, dx: 0.58 }), 1600) === 'Come forward a little',
+    hold.current)
+
+  check('but something clearly worse does take over, once the dwell is up',
+    hold.update(cueFor('dx', 'Step left', { ...even, dx: 0.30 }), 3000) === 'Step left', hold.current)
+
+  // Nothing may be held back when the member has already done it.
+  const fixed = createCue({ dwellMs: 5000 })
+  fixed.update(cueFor('scale', 'Come forward a little', even), 0)
+  check('a solved instruction is dropped immediately, dwell or not',
+    fixed.update(cueFor('dx', 'Step left', { scale: 1, dx: 0.5, dy: 1, turn: 1 }), 50) === 'Step left',
+    fixed.current)
+
+  // Praise, and an empty frame, are not corrections.
+  const praise = createCue({ dwellMs: 5000 })
+  praise.update(cueFor('scale', 'Come forward a little', even), 0)
+  check('getting there is reported at once',
+    praise.update({ cue: 'Good — hold it there', cueAxis: null, scores: even }, 10) === 'Good — hold it there')
+
+  // The feet check is a boolean computed at the edge of frame; it flickers.
+  const feet = createCue({ dwellMs: 1000 })
+  feet.update(cueFor('feet', 'Step back — we need your feet in shot', even), 0)
+  check('a flickering feet check does not flap the instruction',
+    feet.update(cueFor('scale', 'Come forward a little', even), 200) ===
+      'Step back — we need your feet in shot', feet.current)
+  check('and feet still wins when it comes back, being the worst thing there is',
+    feet.update(cueFor('feet', 'Step back — we need your feet in shot', even), 400) ===
+      'Step back — we need your feet in shot')
+
+  // Reset, so one member's instruction is not inherited by the next.
+  feet.reset()
+  check('reset forgets the instruction', feet.current === null)
+
+  check('no alignment at all clears it',
+    createCue().update(null, 0) === '')
+
+  // The real check: feed it a flapping stream and count the changes.
+  const flapping = createCue()
+  let changes = 0
+  let last = null
+  for (let frame = 0; frame < 180; frame++) {      // three seconds at 60fps
+    const odd = frame % 2 === 0
+    const said = flapping.update(
+      odd
+        ? cueFor('feet', 'Step back — we need your feet in shot', even)
+        : cueFor('turn', 'Square your shoulders up', { ...even, turn: 0.61 }),
+      frame * 16.7,
+    )
+    if (said !== last) { changes++; last = said }
+  }
+  check('three seconds of flapping input produces a readable number of changes',
+    changes <= 4, `${changes} changes in 180 frames`)
+}
 
 console.log(failed ? `\n${failed} FAILED\n` : '\nalignment OK\n')
 process.exit(failed ? 1 : 0)
