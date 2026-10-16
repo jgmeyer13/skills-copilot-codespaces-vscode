@@ -139,6 +139,43 @@ await page.locator('#export-report').click()
 const file = await dl
 check('the write-up downloads', /podium-writeup-.*\.md$/.test(file.suggestedFilename()), file.suggestedFilename())
 
+// ── the rig, on the Quality tab ───────────────────────────────────────────
+await page.locator('#dash-tabs button[data-tab="quality"]').click()
+await page.waitForSelector('#reg-tiles .tile', { timeout: 10000 })
+check('the quality tab reports whether photographs lined themselves up',
+  (await page.locator('#reg-tiles .tile').count()) === 2)
+check('and says so plainly when no rig has been saved',
+  /no rig saved/i.test(await page.locator('#light-chart').innerText()),
+  await page.locator('#light-chart').innerText())
+
+// ── the walk-away tallies ─────────────────────────────────────────────────
+await page.locator('#dash-tabs button[data-tab="now"]').click()
+await page.waitForSelector('#tallies .tally', { timeout: 10000 })
+check('all four walk-away tallies are there', (await page.locator('#tallies .tally').count()) === 4)
+
+const firstCount = () => page.locator('#tallies .tally').first().locator('b').textContent()
+check('they start at zero', (await firstCount()) === '0')
+
+await page.locator('#tallies .tally').first().locator('button[data-step="1"]').click()
+await page.waitForFunction(() => document.querySelector('#tallies .tally b').textContent === '1', null, { timeout: 5000 })
+check('tapping one counts it', (await firstCount()) === '1')
+
+// A tally that can go negative is a number somebody has to explain later.
+await page.locator('#tallies .tally').first().locator('button[data-step="-1"]').click()
+await page.waitForFunction(() => document.querySelector('#tallies .tally b').textContent === '0', null, { timeout: 5000 })
+await page.locator('#tallies .tally').first().locator('button[data-step="-1"]').click()
+await page.waitForTimeout(250)
+check('and it will not go below zero', (await firstCount()) === '0')
+
+await page.locator('#tallies .tally').first().locator('button[data-step="1"]').click()
+await page.waitForFunction(() => document.querySelector('#tallies .tally b').textContent === '1', null, { timeout: 5000 })
+await page.reload({ waitUntil: 'load' })
+await page.waitForFunction(() => !!window.__pilot, null, { timeout: 30000 })
+await page.evaluate(() => window.__pilot.setIdle(false))
+await page.locator('#to-dashboard').click()
+await page.waitForSelector('#tallies .tally', { timeout: 10000 })
+check('a tally survives a reload', (await firstCount()) === '1')
+
 check('no console errors anywhere in the console', errs.length === 0, errs.slice(0, 2).join(' | '))
 
 console.log(failed ? `\n${failed} FAILED\n` : '\nconsole OK\n')

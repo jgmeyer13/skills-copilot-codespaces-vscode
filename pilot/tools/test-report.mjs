@@ -7,6 +7,7 @@ import {
   daily, cumulativeRates, byHour, podsNeeded, medianMinutes,
   poseSetSplit, returnIntentSplit, comparability, confidenceByDay,
   funnel, worstStep, FUNNEL_STEPS,
+  registrationStats, lightByDay,
 } from '../src/report.js'
 
 let failed = 0
@@ -129,6 +130,57 @@ check('share of the top is kept too', f[6].ofTop === 0.7, `${f[6].ofTop}`)
 // percentage — it is the one worth fixing first.
 check('the worst step is the biggest loss of people', worstStep(f).id === 'consent', `${worstStep(f).id} lost ${worstStep(f).lost}`)
 check('an empty funnel names nothing rather than guessing', worstStep(funnel({})) === null)
+
+
+// ── the rig: registration and light drift ──────────────────────────────────
+
+{
+  const day = (d, over = {}) => ({ startedAt: Date.parse(`2026-10-${String(d).padStart(2, '0')}T09:00:00Z`), ...over })
+
+  const rows = [
+    day(10, { registered: { scale: 1.02, rotationDeg: -1.2, rmse: 0.004 } }),
+    day(10, { registered: { scale: 0.98, rotationDeg: 2.4, rmse: 0.006 } }),
+    day(11, { registered: { skipped: 'scale 1.44× is outside 0.78–1.28' } }),
+    day(11, { registered: { skipped: 'scale 1.61× is outside 0.78–1.28' } }),
+    day(11, { registered: { skipped: '14.2° of roll is past 10°' } }),
+    day(12, {}),                       // a first visit — nothing to line up against
+  ]
+  const reg = registrationStats(rows)
+
+  check('first visits are not counted as registration failures', reg.n === 5, `n ${reg.n}`)
+  check('the applied share is of what was attempted', reg.applied === 2 && reg.share === 0.4, JSON.stringify(reg))
+  check('the typical correction is the mean of the absolute turns',
+    reg.meanTurnDeg === 1.8 && reg.worstTurnDeg === 2.4, `${reg.meanTurnDeg} / ${reg.worstTurnDeg}`)
+  check('refusals group by cause, not by sentence',
+    reg.reasons.length === 2 && reg.reasons[0].n === 2, JSON.stringify(reg.reasons))
+  check('and are said in words an operator can act on',
+    /nearer or further/.test(reg.reasons[0].why) && !/0\.78/.test(reg.reasons[0].why), reg.reasons[0].why)
+  check('a thin sample says so', reg.thin === true)
+  check('no attempts at all is not a zero rate', registrationStats([day(1, {})]).share === null)
+
+  // ── light ──
+  const rig = { light: { mean: 100 }, camera: { deviceId: 'a' } }
+  const lit = [
+    day(10, { light: { mean: 100 }, camera: { deviceId: 'a' } }),
+    day(10, { light: { mean: 120 }, camera: { deviceId: 'a' } }),
+    day(11, { light: { mean: 50 }, camera: { deviceId: 'a' } }),
+    day(11, { light: { mean: 9999 }, camera: { deviceId: 'a-different-camera' } }),
+    day(12, {}),
+  ]
+  const light = lightByDay(lit, rig)
+
+  check('light is reported per day', light.length === 2, JSON.stringify(light))
+  check('an unchanged room is zero stops and a doubling is one',
+    light[1].mean === -1, `${light[1].mean} stops for half the light`)
+  check('the daily figure is the mean of that day', Math.abs(light[0].mean - 0.132) < 0.002, String(light[0].mean))
+  check('and the worst is kept beside it, with its sign',
+    Math.abs(light[0].worst - 0.263) < 0.002, String(light[0].worst))
+  check('a reading from another camera is dropped, not converted',
+    light[1].n === 1, `${light[1].n} readings on day 11`)
+  check('no rig means no chart rather than a chart against nothing',
+    lightByDay(lit, null).length === 0 && lightByDay(lit, { light: {} }).length === 0)
+}
+
 
 console.log(failed ? `\n${failed} FAILED\n` : '\nreport OK\n')
 process.exit(failed ? 1 : 0)

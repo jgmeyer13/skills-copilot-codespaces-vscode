@@ -463,6 +463,21 @@ table.log td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); color
 .check span { font-size: 13px; color: var(--text-2); }
 .check em { display: block; font-style: normal; font-size: 13px; color: var(--text-3); margin-top: 4px; }
 
+/* ── the walk-away tallies ──────────────────────────────────────────────── */
+
+.tallies { display: grid; gap: 10px; margin-bottom: 18px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.tally {
+  display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 8px;
+  background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r); padding: 11px 13px;
+}
+.tally span { font-size: 13px; color: var(--text-2); line-height: 1.35; }
+.tally b { font-family: var(--mono); font-size: 19px; min-width: 2ch; text-align: right; }
+.tally button {
+  width: 34px; height: 34px; min-height: 34px; padding: 0; border-radius: 9px;
+  background: var(--surface-2); border: 1px solid var(--edge); color: var(--text); font-size: 17px;
+}
+.tally button:hover { background: #1e2531; }
+
 /* ── flip, timeline, card ───────────────────────────────────────────────── */
 
 .flip { display: flex; flex-direction: column; height: 100%; min-height: 0; }
@@ -1005,6 +1020,13 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
         <h3>Today</h3>
         <dl class="tiles" id="today-tiles"></dl>
 
+        <h3>The ones the laptop never sees</h3>
+        <p class="tiny">The funnel can only count people who touched it. A return rate of 30% of the
+        people who came over is a different number from 30% of the people who saw it, and the gap
+        between those two is whether this works on a gym floor or only in a demo. Tap as it happens —
+        at six o'clock you will remember the three interesting ones out of eleven.</p>
+        <div class="tallies" id="tallies"></div>
+
         <h3>The last session</h3>
         <div class="lastcard" id="last-session"></div>
 
@@ -1022,6 +1044,19 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
         against the frame it will actually be compared with. Returning members only — a first visit
         had nothing to line up against.</p>
         <dl class="tiles" id="comp-tiles"></dl>
+
+        <h3>The rig — did the photographs line themselves up?</h3>
+        <p class="tiny">Only returning members can be registered at all, so first visits are not counted
+        as failures here. The refusals are the half worth reading: a pile of them for the same reason is
+        something physical going wrong in the room.</p>
+        <dl class="tiles" id="reg-tiles"></dl>
+        <div id="reg-reasons"></div>
+
+        <h3>Has the light moved?</h3>
+        <p class="tiny">Against the reading taken when the rig was saved, in stops. A tenth of a stop is
+        invisible; a whole one is a different photograph. Sessions on a different camera are left out —
+        a different sensor reading the same wall is a different number.</p>
+        <div id="light-chart"></div>
 
         <h3>What the model could see, by day</h3>
         <p class="tiny">The lighting check, over time. A drift downwards is the room changing, not the people.</p>

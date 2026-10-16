@@ -2099,7 +2099,52 @@ async function renderDashboard() {
 
 // ── Now ────────────────────────────────────────────────────────────────────
 
+/*
+ * The four things that happen in a gym and never reach a laptop.
+ *
+ * DECISIONS.md asks for them — "record the sessions that did not happen" —
+ * and until now there was nowhere to put them, so the funnel's denominator
+ * was everyone who had already decided to take part. That makes every rate
+ * in the pilot a rate among the willing, which is the most flattering
+ * denominator available and the one least like a gym floor.
+ *
+ * They are deliberately NOT added into the funnel. They sit beside it: the
+ * funnel counts screens, these count a person's mind changing, and adding
+ * one to the other would produce a number that is neither.
+ */
+const TALLIES = [
+  ['sawAndWalked', 'Looked over, kept walking'],
+  ['cameAndLeft', 'Came over, left before starting'],
+  ['queueBalked', 'Saw a queue and left'],
+  ['notToday', 'Asked about it, not today'],
+]
+
+function renderTallies(counters) {
+  const host = $('tallies')
+  host.innerHTML = ''
+  for (const [key, label] of TALLIES) {
+    const row = document.createElement('div')
+    row.className = 'tally'
+    row.innerHTML = `<span>${esc(label)}</span><b class="mono">${counters[key] ?? 0}</b>
+      <button type="button" data-step="-1" aria-label="One fewer: ${esc(label)}">−</button>
+      <button type="button" data-step="1" aria-label="One more: ${esc(label)}">+</button>`
+    for (const button of row.querySelectorAll('button')) {
+      button.addEventListener('click', async () => {
+        const step = Number(button.dataset.step)
+        const now = await db.counters()
+        // A tally that can go negative is a tally somebody has to explain in
+        // the write-up, and the undo exists for fat fingers, not for debt.
+        if (step < 0 && !(now[key] ?? 0)) return
+        await db.bump(key, step)
+        renderTallies(await db.counters())
+      })
+    }
+    host.appendChild(row)
+  }
+}
+
 async function renderNow(rows, s, counters) {
+  renderTallies(counters)
   /*
    * Storage is asked for rather than assumed. A browser that will not say how
    * much room is left gets a warning, not a cheerful green tick: "we could
@@ -2192,6 +2237,54 @@ function renderQuality(rows, s, counters) {
     },
     { k: 'Mean confidence', v: s.meanConfidence === null ? '—' : s.meanConfidence.toFixed(2), s: 'how well the model saw' },
   ], { demo: state.demo })
+
+  // ── the rig ──────────────────────────────────────────────────────────────
+  const reg = report.registrationStats(rows)
+  tilesInto('reg-tiles', [
+    {
+      k: 'Lined up automatically',
+      v: reg.share === null ? '—' : pct(reg.share),
+      s: reg.n ? `${reg.applied} of ${reg.n} return visit(s)${reg.thin ? ' · too few to trust' : ''}` : 'no return visits yet',
+    },
+    {
+      k: 'Typical correction',
+      v: reg.meanTurnDeg === null ? '—' : `${reg.meanTurnDeg}°`,
+      s: reg.worstTurnDeg === null ? 'nothing to correct yet' : `worst ${reg.worstTurnDeg}° · scale ${reg.meanScale}×`,
+    },
+  ], { demo: state.demo })
+
+  $('reg-reasons').innerHTML = reg.reasons.length
+    ? `<table class="quality"><thead><tr><th>Why a photograph was left as captured</th><th>Times</th></tr></thead><tbody>${reg.reasons
+        .map((r) => `<tr><td>${esc(r.why)}</td><td class="mono">${r.n}</td></tr>`)
+        .join('')}</tbody></table>`
+    : `<p class="tiny">${reg.n ? 'Every return visit lined up.' : 'Nothing to line up yet.'}</p>`
+
+  const light = report.lightByDay(rows, state.rig)
+  $('light-chart').innerHTML = light.length
+    ? lineChart(
+        [{
+          id: 'light',
+          label: 'Drift from setup',
+          // not series2 — that is the colour lineChart draws its threshold in,
+          // and a series the same colour as the line it must not cross is a
+          // chart that hides its own warning.
+          colour: PALETTE.series1,
+          points: light.map((d, i) => ({
+            x: d.day,
+            y: d.mean,
+            title: `${dayLabel(d.day)}: ${d.mean > 0 ? '+' : ''}${d.mean} stops over ${d.n}, worst ${d.worst}`,
+            endLabel: i === light.length - 1 ? `${d.mean > 0 ? '+' : ''}${d.mean}` : '',
+          })),
+        }],
+        {
+          yMin: -1,
+          yMax: 1,
+          threshold: { at: 0.4, label: 'past here the frames either side are not comparable' },
+          xLabels: light.map((d, i) => (i === 0 || i === light.length - 1 ? dayLabel(d.day) : '')),
+          yLabel: 'stops brighter or darker than the rig was saved at',
+        },
+      )
+    : `<p class="tiny">${state.rig ? 'No sessions on this rig yet.' : 'No rig saved — open Camera rig and save one, and this starts filling in.'}</p>`
 
   const conf = report.confidenceByDay(rows)
   $('conf-chart').innerHTML = conf.length
