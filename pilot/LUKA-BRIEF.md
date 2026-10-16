@@ -1,4 +1,4 @@
-# PODIUM — the brief for Luca
+# PODIUM — the brief for Luka
 
 **What it is, where it stands, and the piece that is yours**
 
