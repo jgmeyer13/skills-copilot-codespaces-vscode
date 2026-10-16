@@ -114,10 +114,32 @@ check('and the correction undoes the drift',
 
 // ── pixels ─────────────────────────────────────────────────────────────────
 
-const m = pixelMatrix(similarity(pts(base), pts(move(base, { dx: 0.1, dy: 0.25 }))), 1920, 1080)
-check('translation becomes pixels on each axis separately',
-  near(m[4], 192, 1e-6) && near(m[5], 270, 1e-6), m.join(', '))
+const m = pixelMatrix(similarity(pts(base), pts(move(base, { dx: 0.1, dy: 0.25 }))), 1920)
+check('translation becomes pixels through the width alone',
+  near(m[4], 192, 1e-6) && near(m[5], 480, 1e-6), m.join(', '))
 check('scale and rotation are already dimensionless', near(m[0], 1, 1e-9) && near(m[1], 0, 1e-9))
+
+// The aspect correction is the difference between a rotation and a shear.
+// A body that really leans six degrees in the room does not lean six degrees
+// in normalised coordinates, because those are as tall as they are wide
+// whatever the sensor is. So the ground truth here is built in the pixel's
+// own square space and pushed back out to normalised — which is what a camera
+// hands you — and only the corrected fit should recover the six.
+const ASPECT = 1080 / 1920
+const leanInTheRoom = (lm, deg) => {
+  const squareSpace = lm.map((p) => ({ ...p, y: p.y * ASPECT }))
+  const rotated = move(squareSpace, { deg, about: { x: 0.5, y: 0.47 * ASPECT } })
+  return rotated.map((p) => ({ ...p, y: p.y / ASPECT }))
+}
+const turned = leanInTheRoom(base, 6)
+const corrected = similarity(torsoPoints(base, { aspect: ASPECT }), torsoPoints(turned, { aspect: ASPECT }))
+const naive = similarity(torsoPoints(base), torsoPoints(turned))
+check('a real six-degree lean is read as six degrees', near(corrected.rotationDeg, 6, 1e-6), `${corrected.rotationDeg}`)
+check('and raw normalised coordinates under-read it by about a sixth',
+  naive.rotationDeg > 4.8 && naive.rotationDeg < 5.2, `raw says ${naive.rotationDeg.toFixed(2)}° for a real 6° lean`)
+check('and invent a residual that is not a body difference',
+  naive.rmse > 0.005 && near(corrected.rmse, 0, 1e-9), `raw rmse ${naive.rmse.toFixed(5)}`)
+check('registration takes the aspect ratio', registration(turned, base, { aspect: ASPECT }).applied)
 
 // ── the degenerate inputs a real camera produces ───────────────────────────
 

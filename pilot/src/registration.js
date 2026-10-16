@@ -47,7 +47,7 @@ export const TORSO = [11, 12, 23, 24]
 export const LIMITS = {
   scale: { min: 0.78, max: 1.28 },
   rotationDeg: 10,
-  shift: 0.22,     // of the frame's smaller side
+  shift: 0.22,     // of the frame WIDTH, after the aspect correction
   rmse: 0.03,      // mean residual, in frame widths, after the fit
   visibility: 0.5, // every torso point must be at least this visible
 }
@@ -128,15 +128,28 @@ export function similarity(from, to) {
   }
 }
 
-/** Pull the torso points out of a landmark array, or null if any is unusable. */
-export function torsoPoints(landmarks, { visibility = LIMITS.visibility } = {}) {
+/**
+ * Pull the torso points out of a landmark array, or null if any is unusable.
+ *
+ * `aspect` is height ÷ width, and it is not optional in practice. Landmarks
+ * arrive normalised 0..1 on each axis independently, so that coordinate space
+ * is as wide as the frame and as tall as it — square, whatever the sensor is.
+ * A rotation fitted in it is a SHEAR in pixels. Measured on a torso: a real
+ * 10° lean reads as 8.4° on a 16:9 frame and 11.5° on a 4:5 one — under and
+ * over by about a sixth, in opposite directions — and it leaves a residual of
+ * 0.011 that is not a body difference at all, which is a third of the budget
+ * the same-body check has to spend. Multiplying y through by the aspect ratio
+ * puts both axes in the same units, which makes the fit a real similarity and
+ * the matrix convertible to pixels by one scalar.
+ */
+export function torsoPoints(landmarks, { visibility = LIMITS.visibility, aspect = 1 } = {}) {
   if (!Array.isArray(landmarks)) return null
   const pts = []
   for (const i of TORSO) {
     const lm = landmarks[i]
     if (!lm || !Number.isFinite(lm.x) || !Number.isFinite(lm.y)) return null
     if (lm.visibility !== undefined && lm.visibility < visibility) return null
-    pts.push({ x: lm.x, y: lm.y })
+    pts.push({ x: lm.x, y: lm.y * aspect })
   }
   return pts
 }
@@ -174,9 +187,10 @@ export function plausible(t, limits = LIMITS) {
  * lets a 4K visit be registered onto a 1080p one without anybody converting
  * anything.
  */
-export function registration(current, baseline, limits = LIMITS) {
-  const from = torsoPoints(current, limits)
-  const to = torsoPoints(baseline, limits)
+export function registration(current, baseline, { limits = LIMITS, aspect = 1 } = {}) {
+  const opts = { visibility: limits.visibility, aspect }
+  const from = torsoPoints(current, opts)
+  const to = torsoPoints(baseline, opts)
   if (!from || !to) return { applied: false, why: 'the torso was not clearly visible in both', transform: null }
   const t = similarity(from, to)
   const verdict = plausible(t, limits)
@@ -184,15 +198,17 @@ export function registration(current, baseline, limits = LIMITS) {
 }
 
 /**
- * The matrix in pixels, for a canvas of a given size.
+ * The matrix in pixels, for a canvas of a given width.
  *
- * Normalised translation is a fraction of each axis independently, so tx
- * scales by width and ty by height. Scale and rotation are already
- * dimensionless and pass through untouched — which is only true because the
- * two frames share an aspect ratio, and they do: one rig, one camera.
+ * One scalar, and height is not a parameter — because the fit was done in
+ * aspect-corrected coordinates where y was already multiplied by height ÷
+ * width. In that space a y of 1 is one frame WIDTH, so both translations
+ * scale by the width and the rotation terms need no correction at all. That
+ * is the whole reason for correcting the aspect up front rather than
+ * patching it in here, where it would be a factor nobody could check.
  */
-export function pixelMatrix(t, width, height) {
+export function pixelMatrix(t, width) {
   if (!t) return null
   const [a, b, c, d] = t.matrix
-  return [a, b, c, d, t.tx * width, t.ty * height]
+  return [a, b, c, d, t.tx * width, t.ty * width]
 }
