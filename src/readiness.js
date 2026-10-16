@@ -120,6 +120,37 @@ export function readiness(ctx) {
         : item('consent', 'Consent text', 'pass', `${languages.length} language(s) ready`),
   )
 
+  /*
+   * The rig, which is the only check here about the room rather than the
+   * software. A pilot can be perfectly configured and still produce
+   * incomparable photographs because the camera re-exposed itself between
+   * two visits, and nothing else on this list would notice.
+   */
+  const rig = ctx.rig
+  if (!rig) {
+    out.push(item('rig', 'The camera and the light', 'warn', 'no rig saved yet',
+      'Open Camera rig and save one. Until then nothing can tell you the light has moved.'))
+  } else {
+    const drift = ctx.lightDrift
+    const locks = rig.locks ?? {}
+    const held = (locks.locked ?? []).length
+    if (drift && drift.state === 'fail') {
+      out.push(item('rig', 'The camera and the light', 'fail', drift.why,
+        'Put the light back where it was, or save a new rig and say so in the log — the frames either side of this are not comparable.'))
+    } else if (drift && drift.state === 'warn') {
+      out.push(item('rig', 'The camera and the light', 'warn', drift.why))
+    } else if (!held) {
+      out.push(item('rig', 'The camera and the light', 'warn',
+        'light steady, but nothing on this camera could be locked',
+        'The photographs can still be comparable; they are just not guaranteed to be. A UVC webcam usually allows an exposure lock where a built-in one does not.'))
+    } else {
+      // "light steady" with no reading behind it would be the dashboard
+      // telling the operator something nothing has checked.
+      out.push(item('rig', 'The camera and the light', 'pass',
+        `${(locks.locked ?? []).join(' and ')} locked · ${drift ? 'light steady' : 'nothing measured since setup'}`))
+    }
+  }
+
   // ── room for the photographs ────────────────────────────────────────────
   if (ctx.storage && ctx.storage.quota) {
     const used = ctx.storage.usage / ctx.storage.quota

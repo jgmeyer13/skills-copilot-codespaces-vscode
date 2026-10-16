@@ -28,6 +28,8 @@ import { L } from './src/scoring.js'
 import { silhouette } from './src/silhouettes.js'
 import { alignment, createLock } from './src/align.js'
 import { readiness, worstState, rulesFingerprint } from './src/readiness.js'
+import { registration, pixelMatrix } from './src/registration.js'
+import * as rig from './src/rig.js'
 import * as report from './src/report.js'
 import { barChart, lineChart, funnelChart, splitBar, PALETTE } from './src/charts.js'
 import { writeUp } from './src/writeup.js'
@@ -59,7 +61,10 @@ const state = {
   devices: [],
   pose: null,
   poseOverride: null,
-  ghost: null,
+  ghost: null,           // where they stood last time — what the mirror draws
+  baseline: null,        // their FIRST visit — what photographs are registered onto
+  rig: null,             // the saved camera and light, from the setup screen
+  light: null,           // this session's light reading
   retakes: 0,
 }
 
@@ -304,6 +309,9 @@ function show(screen) {
   const changed = state.screen !== screen
   state.screen = screen
   app.dataset.screen = screen
+  for (const el of document.querySelectorAll('.screen')) {
+    el.classList.toggle('on', el.dataset.id === screen)
+  }
   // Counted once per arrival, so the operator can see where people stop
   // rather than guessing from the sessions that happened to get recorded.
   if (changed && FUNNEL.includes(screen)) db.bump(screen).catch(() => {})
@@ -347,7 +355,7 @@ async function reset() {
   Object.assign(state, {
     member: null, memberKey: null, identifier: '', issuedCode: null,
     consent: { age: false, record: false, keep: false },
-    people: 1, session: null, frames: [], ghost: null, retakes: 0,
+    people: 1, session: null, frames: [], ghost: null, baseline: null, light: null, retakes: 0,
   })
   $('review-code').hidden = true
   await refreshPilotState()
@@ -567,6 +575,12 @@ $('consent-next').addEventListener('click', async () => {
   })
   state.consent = { age: true, record: true, keep: true }
   state.ghost = state.member?.lastSkeleton ?? null
+  // The ghost is last visit, because that is the useful nudge for a person
+  // standing there. The registration baseline is the FIRST visit, because
+  // registering each visit onto the one before it would let the reference
+  // walk: twelve small corrections in the same direction are one big one, and
+  // visit twelve would be comparable to visit eleven and to nothing else.
+  state.baseline = state.member?.baseSkeleton ?? state.member?.lastSkeleton ?? null
   $('ready-hint').textContent = state.ghost
     ? 'The blue outline is where you stood last time. Line up with it.'
     : 'Stand on the tape mark. Shirt on or off — your call.'
@@ -612,7 +626,7 @@ const video = $('cam')
  * applyConstraints takes it. Whatever it settles on is recorded per session so
  * keep rate can be read against it.
  */
-async function startCamera(deviceId = state.camera.deviceId) {
+async function startCamera(deviceId = state.camera.deviceId, { pose = true } = {}) {
   stopCamera()
   const want = {
     width: { ideal: config.camera.idealWidth },
@@ -656,7 +670,11 @@ async function startCamera(deviceId = state.camera.deviceId) {
   await video.play().catch(() => {})
   await listCameras()
 
-  if (!state.pose && !state.poseOverride) {
+  // The rig screen is about exposure and light; it has no use for a body
+  // model, and making an operator wait several seconds for 5.6MB of it before
+  // they can read a white-balance setting is a tax on the one screen they
+  // open at the start of every shift.
+  if (pose && !state.pose && !state.poseOverride) {
     try {
       state.pose = await createMediaPipePose({
         maxPeople: config.capture.maxPeople,
@@ -985,6 +1003,10 @@ async function runCapture() {
   })
   state.session.retakes = state.retakes
 
+  // Read before anybody is asked to hold still, and from the background
+  // patches, so it is a reading of the room rather than of the person in it.
+  state.light = sampleLight()
+
   const capStage = document.querySelector('.screen[data-id="capture"] .stage')
   capStage.insertBefore(video, capStage.firstChild)
   video.style.display = ''
@@ -1068,6 +1090,43 @@ function esc(t) {
   return String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 }
 
+/**
+ * Re-draw a captured frame so the body lands where the baseline body is.
+ *
+ * The photograph is changed, and that is worth being uncomfortable about for
+ * a second. What makes it legitimate is the shape of the change: a similarity
+ * transform moves, turns and resizes the whole picture and cannot alter one
+ * proportion inside it. Nothing about the body is edited. What is removed is
+ * the 40mm they drifted forward and the two degrees they turned — differences
+ * between the two PHOTOGRAPHS that were never differences between the two
+ * bodies, and that are exactly what makes an honest comparison hard to read.
+ *
+ * The transform is recorded on the frame, so anyone can see afterwards what
+ * was done to their picture, and so a reviewer can tell a registered frame
+ * from a lucky one.
+ */
+async function registerFrame(blob, transform, width, height) {
+  const bitmap = await createImageBitmap(blob)
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    // Rotating or shrinking a frame exposes the edges. Black, because the
+    // product is a dark room and an empty corner should read as the room.
+    ctx.fillStyle = '#000'
+    ctx.fillRect(0, 0, width, height)
+    ctx.setTransform(...pixelMatrix(transform, width))
+    ctx.drawImage(bitmap, 0, 0, width, height)
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    const out = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.92))
+    canvas.width = canvas.height = 1
+    return out ?? blob
+  } finally {
+    bitmap.close?.()
+  }
+}
+
 async function presentReview(results) {
   state.frames = []
   for (const r of results) {
@@ -1081,11 +1140,36 @@ async function presentReview(results) {
       score: r.score,
       landmarks: r.kind === 'measurement' ? r.landmarks?.[0] ?? null : null,
       blob: r.blob,
+      registered: null,
       kept: false,
       sent: false,
       shared: false,
       createdAt: Date.now(),
     }
+
+    /*
+     * Only the progress shot, and only against the member's first visit.
+     *
+     * The pose frames are not compared to anything — registering them would
+     * be a cosmetic change to a photograph for no measurement gain, which is
+     * the kind of thing that is hard to justify when someone asks later why
+     * their picture is not what the camera saw.
+     */
+    if (frame.kind === 'measurement' && frame.landmarks && state.baseline) {
+      const aspect = r.height && r.width ? r.height / r.width : 1
+      const fit = registration(frame.landmarks, state.baseline, { aspect })
+      if (fit.applied) {
+        frame.blob = await registerFrame(r.blob, fit.transform, r.width, r.height)
+        frame.registered = {
+          scale: Number(fit.transform.scale.toFixed(4)),
+          rotationDeg: Number(fit.transform.rotationDeg.toFixed(2)),
+          rmse: Number(fit.transform.rmse.toFixed(4)),
+        }
+      } else {
+        frame.registered = { skipped: fit.why }
+      }
+    }
+
     await db.saveFrame(frame)
     state.frames.push(frame)
   }
@@ -1102,11 +1186,23 @@ async function presentReview(results) {
    */
   const measured = results.find((r) => r.kind === 'measurement')?.landmarks?.[0]
   if (measured && state.ghost) {
+    /*
+     * Scored on the RAW landmarks, before any registration runs.
+     *
+     * This number says how well the member stood where they were asked to.
+     * Measuring it after correcting the photograph would measure the
+     * correction, which would report a rig that is working perfectly however
+     * badly the room was behaving — the most flattering possible lie and the
+     * easiest one to tell by accident.
+     */
     const a = alignment(measured, state.ghost)
     state.session.alignScore = a.score
     state.session.alignLocked = a.locked
-    await db.saveSession(state.session)
   }
+  const registered = state.frames.find((f) => f.kind === 'measurement')?.registered
+  if (registered) state.session.registered = registered
+  if (state.light) state.session.light = state.light
+  if (measured || registered || state.light) await db.saveSession(state.session)
 
   /*
    * Fixed order, named frames, two independent decisions each.
@@ -1285,6 +1381,10 @@ async function finishSession(outcome) {
       visits: (state.member?.visits ?? 0) + 1,
       keepsHistory: true,
       lastSkeleton: measurement?.landmarks ?? state.member?.lastSkeleton ?? null,
+      // Written on the first visit that keeps a progress shot, and never
+      // written again. It is the fixed point every later visit is measured
+      // onto; a baseline that updates is not a baseline.
+      baseSkeleton: state.member?.baseSkeleton ?? measurement?.landmarks ?? null,
     })
   }
   await refreshPilotState()
@@ -1298,6 +1398,12 @@ async function finishSession(outcome) {
  * were captioned "1 week apart" — which in a product whose whole claim is an
  * honest comparison is not a rounding error.
  */
+/** The same gap as `apart`, without the sentence around it, for the card. */
+function gapLabel(a, b) {
+  const said = apart(a, b)
+  return said === 'taken the same day' ? 'same day' : said.replace(/ apart$/, '')
+}
+
 function apart(a, b) {
   const days = Math.floor((b - a) / 86400000)
   if (days < 1) return 'taken the same day'
@@ -1308,37 +1414,96 @@ function apart(a, b) {
   return `${months} month${months === 1 ? '' : 's'} apart`
 }
 
+/*
+ * Which two frames are on screen. The baseline end is fixed — it is their
+ * first visit, the thing everything is registered onto — and the other end
+ * moves, because a member with six visits wants to look at more pairs than
+ * one. Held outside presentCompare so the timeline can change it without
+ * rebuilding the screen.
+ */
+let compareHistory = []
+let compareIndex = -1
+
 async function presentCompare() {
   const history = (await db.framesForMember(state.memberKey)).filter((f) => f.kind === 'measurement')
   if (history.length < 2) {
     banner('Saved. Next time you will see them side by side.')
     return reset()
   }
-  const first = history[0]
-  const latest = history[history.length - 1]
+  compareHistory = history
+  compareIndex = history.length - 1
+  paintCompare()
+  renderTimeline()
+  setCompareView('side')
+  show('compare')
+}
+
+/** Revoke as we go: a member with a year of visits is a lot of held blobs. */
+let compareUrls = []
+const freshUrl = (blob) => {
+  const url = URL.createObjectURL(blob)
+  compareUrls.push(url)
+  return url
+}
+
+function paintCompare() {
+  for (const url of compareUrls) URL.revokeObjectURL(url)
+  compareUrls = []
+  const first = compareHistory[0]
+  const latest = compareHistory[compareIndex]
   $('compare-sub').textContent = `Same mark, same light, ${apart(first.createdAt, latest.createdAt)}.`
   // The wipe view needs the two images at a stable size; the clip is a
   // percentage of the frame, so both must be laid out identically or the
   // bodies will not line up and the comparison becomes a lie.
-  const thenUrl = URL.createObjectURL(first.blob)
-  const nowUrl = URL.createObjectURL(latest.blob)
+  const thenUrl = freshUrl(first.blob)
+  const nowUrl = freshUrl(latest.blob)
+  const isToday = compareIndex === compareHistory.length - 1
+  const nowLabel = isToday ? 'Today' : `Visit ${compareIndex + 1}`
   $('wipe-then').src = thenUrl
   $('wipe-now').src = nowUrl
-  $('wipe-key-then').textContent = `First visit · ${new Date(first.createdAt).toLocaleDateString('en-ZA')}`
-  $('wipe-key-now').textContent = `Today · ${new Date(latest.createdAt).toLocaleDateString('en-ZA')}`
+  $('flip-then').src = thenUrl
+  $('flip-now').src = nowUrl
+  $('wipe-key-then').textContent = `First visit · ${dayLabel(first.createdAt)}`
+  $('wipe-key-now').textContent = `${nowLabel} · ${dayLabel(latest.createdAt)}`
   setWipe(50)
-  setCompareView('side')
+  setFlip(true)
 
-  $('compare').innerHTML = [first, latest]
+  $('compare').innerHTML = [[first, 'First visit'], [latest, nowLabel]]
     .map(
-      (f, i) => `
+      ([f, label]) => `
       <figure>
-        <img src="${URL.createObjectURL(f.blob)}" alt="" />
-        <figcaption><span>${i === 0 ? 'First visit' : 'Today'}</span><span>${new Date(f.createdAt).toLocaleDateString('en-ZA')}</span></figcaption>
+        <img src="${freshUrl(f.blob)}" alt="" />
+        <figcaption><span>${esc(label)}</span><span>${new Date(f.createdAt).toLocaleDateString('en-ZA')}</span></figcaption>
       </figure>`,
     )
     .join('')
-  show('compare')
+}
+
+/*
+ * Every visit, not just the two ends.
+ *
+ * The first visit is in the strip but cannot be selected — it is the fixed
+ * end of every comparison, and a member who picked it for both sides would
+ * get a photograph compared with itself and a caption saying nothing changed.
+ */
+function renderTimeline() {
+  const strip = $('timeline-strip')
+  $('timeline').hidden = compareHistory.length < 3
+  if (compareHistory.length < 3) return
+  strip.innerHTML = ''
+  compareHistory.forEach((f, i) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.setAttribute('aria-pressed', String(i === compareIndex))
+    b.disabled = i === 0
+    b.innerHTML = `<img src="${freshUrl(f.blob)}" alt="" /><small>${i === 0 ? 'first' : dayLabel(f.createdAt)}</small>`
+    b.addEventListener('click', () => {
+      compareIndex = i
+      paintCompare()
+      for (const other of strip.children) other.setAttribute('aria-pressed', String(other === b))
+    })
+    strip.appendChild(b)
+  })
 }
 /*
  * Two ways to look at the same pair. The wipe is driven by a range input as
@@ -1353,16 +1518,57 @@ function setWipe(pct) {
   if ($('wipe-slider').valueAsNumber !== clamped) $('wipe-slider').value = String(clamped)
 }
 
+/*
+ * The third way of looking, and the one that actually shows small changes.
+ *
+ * Side by side makes the eye travel; a wipe only ever shows half of each
+ * body. Flipping puts the two frames in the same place and swaps between
+ * them, so anything that moved jumps and everything that did not sits still.
+ * It only works because the frames are registered — on two hand-held
+ * photographs it is a strobe light.
+ *
+ * No cross-fade, deliberately. A fade invents an in-between image that was
+ * never taken, and the honesty of this view is that there is nothing between
+ * the two.
+ */
+let flipTimer = 0
+let flipShowingThen = true
+
+function setFlip(showThen) {
+  flipShowingThen = showThen
+  $('flip-then').toggleAttribute('data-off', !showThen)
+  $('flip-now').toggleAttribute('data-off', showThen)
+  const f = compareHistory[0]
+  const l = compareHistory[compareIndex]
+  const which = showThen ? f : l
+  $('flip-key').textContent = which
+    ? `${showThen ? 'First visit' : compareIndex === compareHistory.length - 1 ? 'Today' : `Visit ${compareIndex + 1}`} · ${dayLabel(which.createdAt)}`
+    : ''
+}
+
+function startFlipping() {
+  stopFlipping()
+  // Slow enough to read the label, fast enough that the eye holds both.
+  flipTimer = setInterval(() => setFlip(!flipShowingThen), 1100)
+}
+function stopFlipping() { clearInterval(flipTimer); flipTimer = 0 }
+
+$('flip-stack').addEventListener('click', () => { stopFlipping(); setFlip(!flipShowingThen) })
+
 function setCompareView(which) {
-  const wipe = which === 'wipe'
-  $('compare').hidden = wipe
-  $('wipe-view').hidden = !wipe
-  $('view-side').setAttribute('aria-pressed', String(!wipe))
-  $('view-wipe').setAttribute('aria-pressed', String(wipe))
+  $('compare').hidden = which !== 'side'
+  $('wipe-view').hidden = which !== 'wipe'
+  $('flip-view').hidden = which !== 'flip'
+  for (const [id, name] of [['view-side', 'side'], ['view-wipe', 'wipe'], ['view-flip', 'flip']]) {
+    $(id).setAttribute('aria-pressed', String(which === name))
+  }
+  if (which === 'flip') startFlipping()
+  else stopFlipping()
 }
 
 $('view-side').addEventListener('click', () => setCompareView('side'))
 $('view-wipe').addEventListener('click', () => setCompareView('wipe'))
+$('view-flip').addEventListener('click', () => setCompareView('flip'))
 $('wipe-slider').addEventListener('input', (e) => setWipe(e.target.valueAsNumber))
 
 {
@@ -1383,8 +1589,349 @@ $('wipe-slider').addEventListener('input', (e) => setWipe(e.target.valueAsNumber
   }
 }
 
-$('compare-done').addEventListener('click', () => reset())
+$('compare-done').addEventListener('click', () => { stopFlipping(); reset() })
 
+// ── the card ───────────────────────────────────────────────────────────────
+
+/*
+ * The one artefact of this that might leave the building.
+ *
+ * It is drawn here, on this laptop, from two photographs that are already on
+ * this laptop, and then offered as a download. Nothing is uploaded and there
+ * is nothing to upload it to — which is the same promise the consent screen
+ * makes, kept in the one place a member would most expect it to be broken.
+ *
+ * 4:5 because that is what the capture produces and what a phone shows
+ * without cropping someone's head off.
+ */
+const CARD = { w: 1080, h: 1350, pad: 36, foot: 150 }
+
+async function drawCard(then, now) {
+  const canvas = document.createElement('canvas')
+  canvas.width = CARD.w
+  canvas.height = CARD.h
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#07090c'
+  ctx.fillRect(0, 0, CARD.w, CARD.h)
+
+  const gap = 12
+  const cellW = (CARD.w - CARD.pad * 2 - gap) / 2
+  const cellH = CARD.h - CARD.pad - CARD.foot
+
+  for (const [i, frame] of [then, now].entries()) {
+    const bitmap = await createImageBitmap(frame.blob)
+    try {
+      // Cover, not contain: two letterboxed bodies in a tall card would be
+      // mostly black. The crop is identical on both because the frames are
+      // registered, so the pair stays a fair comparison.
+      const scale = Math.max(cellW / bitmap.width, cellH / bitmap.height)
+      const w = bitmap.width * scale
+      const h = bitmap.height * scale
+      const x = CARD.pad + i * (cellW + gap)
+      ctx.save()
+      ctx.beginPath()
+      ctx.roundRect(x, CARD.pad, cellW, cellH, 18)
+      ctx.clip()
+      ctx.drawImage(bitmap, x + (cellW - w) / 2, CARD.pad + (cellH - h) / 2, w, h)
+      ctx.restore()
+    } finally {
+      bitmap.close?.()
+    }
+  }
+
+  const label = (text, x, align) => {
+    ctx.textAlign = align
+    ctx.fillStyle = 'rgba(242,245,249,0.92)'
+    ctx.font = '600 30px ui-sans-serif, system-ui, sans-serif'
+    ctx.fillText(text, x, CARD.pad + cellH + 52)
+  }
+  label(dayLabel(then.createdAt), CARD.pad, 'left')
+  label(dayLabel(now.createdAt), CARD.w - CARD.pad, 'right')
+
+  ctx.textAlign = 'center'
+  ctx.fillStyle = '#3ddc84'
+  ctx.font = '700 40px ui-sans-serif, system-ui, sans-serif'
+  ctx.fillText(gapLabel(then.createdAt, now.createdAt), CARD.w / 2, CARD.pad + cellH + 54)
+
+  ctx.fillStyle = 'rgba(159,173,191,0.75)'
+  ctx.font = '500 24px ui-sans-serif, system-ui, sans-serif'
+  ctx.fillText(`${config.pilot.venue} · same spot, same light`, CARD.w / 2, CARD.pad + cellH + 104)
+
+  return new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.92))
+}
+
+let cardUrl = null
+$('make-card').addEventListener('click', async () => {
+  const then = compareHistory[0]
+  const now = compareHistory[compareIndex]
+  if (!then || !now) return
+  const blob = await drawCard(then, now)
+  if (!blob) return banner('The card could not be drawn.', 4000)
+  if (cardUrl) URL.revokeObjectURL(cardUrl)
+  cardUrl = URL.createObjectURL(blob)
+  $('card-img').src = cardUrl
+  $('card-save').href = cardUrl
+  $('card-save').download = `podium-${dayLabel(now.createdAt).replace(/\s+/g, '-').toLowerCase()}.jpg`
+  $('card-sheet').hidden = false
+})
+$('card-close').addEventListener('click', () => { $('card-sheet').hidden = true })
+
+
+// ── the rig: the camera, held still ────────────────────────────────────────
+
+/*
+ * The part of the product that a phone application cannot copy.
+ *
+ * Everything else here is about the body. This is about the room, and the
+ * room is where comparability is actually won or lost: auto-exposure deciding
+ * this member is darker than the last one, white balance warming up because
+ * somebody opened a door, the gym's overhead lights on a different circuit at
+ * six in the evening than at six in the morning. None of it announces itself,
+ * and all of it survives a perfectly held pose.
+ */
+
+const LIGHT_LABELS = { pass: 'steady', warn: 'drifting', fail: 'moved' }
+let lightCanvas = null
+
+/**
+ * Read the two background patches and return a light fingerprint.
+ *
+ * Deliberately not an average of the whole frame: a frame with a person in it
+ * averages the person, so the reading would move with who is standing there
+ * and tell you nothing about the light. The patches sit above the head of
+ * anyone tall enough to fit, where the answer is always the background.
+ */
+function sampleLight() {
+  const w = video.videoWidth
+  const h = video.videoHeight
+  if (!w || !h) return null
+  lightCanvas ??= document.createElement('canvas')
+  const ctx = lightCanvas.getContext('2d', { willReadFrequently: true })
+  const means = []
+  for (const patch of rig.PATCHES) {
+    const pw = Math.max(2, Math.round(patch.w * w))
+    const ph = Math.max(2, Math.round(patch.h * h))
+    lightCanvas.width = pw
+    lightCanvas.height = ph
+    try {
+      ctx.drawImage(video, Math.round(patch.x * w), Math.round(patch.y * h), pw, ph, 0, 0, pw, ph)
+      means.push(rig.patchMean(ctx.getImageData(0, 0, pw, ph).data))
+    } catch {
+      means.push(null)   // a frame that is not ready yet, not a dark room
+    }
+  }
+  return rig.fingerprint(means)
+}
+
+async function loadRig() {
+  try {
+    const rows = await db.allMeta()
+    state.rig = rows.find((r) => r.key === 'rig')?.value ?? null
+  } catch { state.rig = null }
+  return state.rig
+}
+
+/** Where the light stands right now, against the rig it was set up with. */
+function lightStatus(now = state.light) {
+  if (!state.rig) return { state: 'warn', why: 'no rig saved — open Camera rig on the operator screen', stops: null }
+  const same = rig.rigMatches(state.rig.camera, state.camera)
+  if (!same.ok) return { state: 'warn', why: same.why, stops: null }
+  return rig.lightDrift(state.rig.light, now)
+}
+
+/**
+ * The most recent session's light, against the saved rig.
+ *
+ * The readiness panel runs on the operator screen, where there is usually no
+ * camera open at all, so a live sample would be a photograph of a closed
+ * shutter. The last session's reading is the honest substitute: it is what
+ * the room was doing the last time anybody looked.
+ */
+function lastLightDrift(rows) {
+  if (!state.rig) return null
+  const last = (rows ?? []).filter((r) => r.light).sort((a, b) => b.startedAt - a.startedAt)[0]
+  if (!last) return null
+  if (!rig.rigMatches(state.rig.camera, last.camera).ok) return null
+  return rig.lightDrift(state.rig.light, last.light)
+}
+
+// ── the setup screen ───────────────────────────────────────────────────────
+
+let setupTimer = 0
+let setupPlan = []
+
+function paintSetupOverlay() {
+  const canvas = $('setup-overlay')
+  const box = canvas.getBoundingClientRect()
+  const dpr = Math.min(window.devicePixelRatio || 1, 2)
+  if (canvas.width !== Math.round(box.width * dpr)) {
+    canvas.width = Math.round(box.width * dpr)
+    canvas.height = Math.round(box.height * dpr)
+  }
+  const ctx = canvas.getContext('2d')
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, box.width, box.height)
+
+  const vw = video.videoWidth
+  const vh = video.videoHeight
+  if (!vw || !vh) return
+
+  // The preview is letterboxed, so the boxes have to follow the video rather
+  // than the element, or they would sit over the black bars and the operator
+  // would be told the light was being read somewhere it is not.
+  const scale = Math.min(box.width / vw, box.height / vh)
+  const w = vw * scale
+  const h = vh * scale
+  const x = (box.width - w) / 2
+  const y = (box.height - h) / 2
+
+  ctx.strokeStyle = 'rgba(90,169,255,0.9)'
+  ctx.fillStyle = 'rgba(90,169,255,0.12)'
+  ctx.lineWidth = 2
+  for (const patch of rig.PATCHES) {
+    const px = x + patch.x * w
+    const py = y + patch.y * h
+    const pwid = patch.w * w
+    const phei = patch.h * h
+    ctx.fillRect(px, py, pwid, phei)
+    ctx.strokeRect(px, py, pwid, phei)
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.75)'
+  ctx.font = '12px ui-sans-serif, system-ui, sans-serif'
+  ctx.fillText('light sampled here', x + rig.PATCHES[0].x * w, y + (rig.PATCHES[0].y + rig.PATCHES[0].h) * h + 15)
+}
+
+function renderLocks(taken) {
+  $('setup-locks').innerHTML = taken
+    .map((t) => {
+      const st = t.locked ? 'pass' : t.possible ? 'fail' : 'warn'
+      const mark = t.locked ? '●' : t.possible ? '▲' : '○'
+      const said = t.locked ? 'locked' : t.possible ? 'would not take' : t.why
+      return `<div class="check ${st}"><i>${mark}</i><div><b>${esc(t.label)}</b>
+        <span>${esc(said)}</span><em>${esc(t.purpose)}</em></div></div>`
+    })
+    .join('')
+}
+
+function renderSetupLight() {
+  const now = sampleLight()
+  const drift = state.rig ? lightStatus(now) : null
+  const tiles = [
+    ['Now', now ? Math.round(now.mean) : '—', 'mean of both patches'],
+    ['Left to right', now ? Math.round(now.spread) : '—', 'a one-sided light shows up here'],
+  ]
+  if (state.rig?.light) {
+    tiles.push(['At setup', Math.round(state.rig.light.mean), new Date(state.rig.at).toLocaleDateString('en-ZA')])
+    tiles.push([
+      'Drift',
+      drift?.stops === null || drift?.stops === undefined ? '—' : `${drift.stops > 0 ? '+' : ''}${drift.stops.toFixed(2)}`,
+      drift ? `stops · ${LIGHT_LABELS[drift.state] ?? drift.state}` : 'stops',
+    ])
+  }
+  $('setup-light').innerHTML = tiles
+    .map(([k, v, sub]) => `<div class="tile"><dt>${esc(k)}</dt><dd>${esc(String(v))}<small>${esc(sub)}</small></dd></div>`)
+    .join('')
+}
+
+async function openSetup() {
+  show('setup')
+  $('setup-venue').textContent = `${config.pilot.venue}, ${config.pilot.city}`
+  const stage = $('setup-stage')
+  stage.insertBefore(video, $('setup-overlay'))
+  video.style.display = ''
+  if (!state.stream) await startCamera(undefined, { pose: false }).catch(() => {})
+  await loadRig()
+
+  const pick = $('setup-camera')
+  pick.innerHTML = state.devices
+    .map((d, i) => `<option value="${d.deviceId}">${esc((d.label || `Camera ${i + 1}`).slice(0, 44))}</option>`)
+    .join('')
+  if (state.camera.deviceId) pick.value = state.camera.deviceId
+  $('setup-res').textContent = state.camera.width ? `${state.camera.width}×${state.camera.height}` : '—'
+
+  const track = state.stream?.getVideoTracks()[0]
+  setupPlan = rig.lockPlan(track?.getCapabilities?.())
+  renderLocks(rig.locksTaken(setupPlan, track?.getSettings?.() ?? {}))
+  $('setup-saved').textContent = state.rig
+    ? `Saved ${new Date(state.rig.at).toLocaleString('en-ZA')} · ${esc(state.rig.camera?.label ?? 'camera')}`
+    : 'Nothing saved yet. Until there is, the light cannot be checked against anything.'
+
+  clearInterval(setupTimer)
+  setupTimer = setInterval(() => { paintSetupOverlay(); renderSetupLight() }, 700)
+  paintSetupOverlay()
+  renderSetupLight()
+}
+
+function closeSetup() {
+  clearInterval(setupTimer)
+  setupTimer = 0
+  video.style.display = 'none'
+  document.querySelector('.screen[data-id="ready"] .stage').insertBefore(video, $('overlay'))
+  show('dashboard')
+}
+
+$('open-setup').addEventListener('click', () => openSetup())
+$('setup-close').addEventListener('click', () => closeSetup())
+
+$('setup-camera').addEventListener('change', async (e) => {
+  await startCamera(e.target.value)
+  const track = state.stream?.getVideoTracks()[0]
+  setupPlan = rig.lockPlan(track?.getCapabilities?.())
+  renderLocks(rig.locksTaken(setupPlan, track?.getSettings?.() ?? {}))
+  $('setup-res').textContent = `${state.camera.width}×${state.camera.height}`
+})
+
+/*
+ * applyConstraints resolving is not the same as the setting taking. A device
+ * is free to accept the call and carry on doing what it was doing, so the
+ * settings are read back and the screen reports what the camera DID, not what
+ * it was asked. "We tried to lock the camera" is not a claim worth making.
+ */
+$('setup-lock').addEventListener('click', async () => {
+  const track = state.stream?.getVideoTracks()[0]
+  if (!track) return banner('No camera open.', 4000)
+  const constraints = rig.lockConstraints(setupPlan)
+  if (!Object.keys(constraints).length) {
+    $('setup-lock-note').textContent = 'This camera exposes none of them to the browser.'
+    return
+  }
+  try {
+    await track.applyConstraints(constraints)
+  } catch (err) {
+    $('setup-lock-note').textContent = `The camera refused: ${err.name}`
+  }
+  const taken = rig.locksTaken(setupPlan, track.getSettings?.() ?? {})
+  renderLocks(taken)
+  const summary = rig.lockSummary(taken)
+  $('setup-lock-note').textContent = summary.locked.length
+    ? `${summary.locked.join(' and ')} held.`
+    : 'Nothing held. The photographs will still be comparable if the room is; they just will not be guaranteed.'
+})
+
+$('setup-save').addEventListener('click', async () => {
+  const track = state.stream?.getVideoTracks()[0]
+  const light = sampleLight()
+  if (!light) return banner('No picture to read the light from yet.', 4000)
+  const taken = rig.locksTaken(setupPlan, track?.getSettings?.() ?? {})
+  state.rig = {
+    at: Date.now(),
+    camera: { ...state.camera },
+    light,
+    locks: rig.lockSummary(taken),
+    settings: Object.fromEntries(taken.map((t) => [t.name, t.actual])),
+  }
+  await db.setMeta('rig', state.rig)
+  $('setup-saved').textContent = `Saved ${new Date(state.rig.at).toLocaleString('en-ZA')} · ${state.rig.camera.label ?? 'camera'}`
+  banner('Rig saved. Every session from here is measured against this room.')
+  renderSetupLight()
+})
+
+$('setup-forget').addEventListener('click', async () => {
+  await db.setMeta('rig', null)
+  state.rig = null
+  $('setup-saved').textContent = 'Forgotten. Set it up again before the next session.'
+  renderSetupLight()
+})
 
 // ── forget me ──────────────────────────────────────────────────────────────
 /*
@@ -1577,6 +2124,11 @@ async function renderNow(rows, s, counters) {
     cameraOk: state.screen === 'dashboard' ? undefined : !!state.stream,
     modelOk: !!state.pose,
     purgedAt: purged.at,
+    rig: await loadRig(),
+    // Read from the last real session rather than live: the operator console
+    // has no camera open, and a drift reading taken with the lens dark would
+    // be a reading of nothing reported as a reading of the room.
+    lightDrift: lastLightDrift(rows),
     now: Date.now(),
   })
 
@@ -1905,6 +2457,9 @@ window.__pilot = {
   async wipe() { await db.wipeEverything(); await refreshPilotState() },
   /** What the review screen is showing, in display order, with hidden kinds. */
   reviewOrder: () => [...document.querySelectorAll('#frames .frame-card')].map((c) => c.dataset.kind),
+  /* Compare needs a member with a history, which otherwise costs two real
+     thirty-second sessions to produce. */
+  presentCompare: () => presentCompare(),
   idleFor: idleMsFor,
   /*
    * The harness turns the watchdog off.

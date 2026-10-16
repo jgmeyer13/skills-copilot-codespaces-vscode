@@ -1,247 +1,185 @@
-# PODIUM — four hours at Luca's
+# PODIUM — build night, on your own
 
-**A run sheet for two people, three machines and one tape measure**
+**The plan, rewritten for one person, one laptop and three AIs**
 
 16 October 2026
 
 ---
 
-## What tonight is actually for
+Luka being ill changes the shape of the evening but not the point of it. You
+lose the fast PC and the second pair of hands; you keep the only three things
+that actually matter, and all three are things one person can do.
 
-Four hours with an AI in the loop realistically gets you through Step 5 of the
-brief, not Step 9. So here is the order things matter in, and the first three
-are the whole point:
+What you lose, and what replaces it:
 
-1. **The measured field of view** of the camera you will actually use.
-2. **The camera distance** that follows from it, and the **bay depth** that
-   follows from that.
-3. **A footprint taped on a floor** that you have both stood inside.
-
-All three are inputs to the conversation with Aspire this weekend, and not one
-of them can be got from an AI, a spec sheet or a render. Everything after that
-is a bonus. If the evening ends with those three written on paper, it paid for
-itself.
-
----
-
-## Before you leave the house
-
-- [ ] **Tape measure, 5m.** The single most important object tonight.
-- [ ] Masking or painter's tape — a full roll
-- [ ] Laptop and charger
-- [ ] Tablet, with this page and `LUCA-BRIEF.pdf` on it
-- [ ] **The webcam you intend to use for the pilot**, if you own one
-- [ ] A sheet of cardboard, or newspaper and sticky tape, and scissors
-- [ ] Phone, for photographs
-- [ ] Something to eat. It is four hours.
-
-**Send Luca `LUCA-BRIEF.pdf` now**, and ask him to do one thing before you
-arrive: install OpenSCAD from **openscad.org** → Download → Windows installer.
-It is a download and a double-click, but it is a few hundred megabytes and you
-do not want to spend the first twenty minutes watching a progress bar.
-
-## The three machines
-
-| | |
+| Gone | Replaced by |
 |---|---|
-| **Luca's PC** | OpenSCAD and Gemini Pro. F6 on a full model with three versions, a human figure and two translucent cones is genuinely not a laptop job — this is why the modelling happens here. |
-| **Your laptop** | The camera, the measuring tools, the live app, and git. The camera has to be where the tape measure is, which is why the two tracks below are separate. |
-| **The tablet** | This run sheet and the brief, propped up where both of you can see it, because both your hands will be busy. |
+| A fast PC for F6 renders | Preview with `$fn = 24` and `%` cones, which never render at all. F6 once, at the end, on one version. |
+| A second person to hold the cardboard | A chair, a broom and some tape. Props do not get bored. |
+| A second person to stand in frame | The wall scale moved to the mark, which answers the same question without a body in it — and then one real session on yourself, which answers it better. |
+| Luka's eye on the design | Three AIs and your own. You built the software; you can read a drawing. |
+
+**Be honest about the clock.** Four hours of two people working in parallel is
+not four hours of one person. Blocks 1 to 3 below are ninety minutes and they
+are the ones that cannot be done any other night, because they need the camera,
+the tape and the floor all in the same place. The SCAD can be done at 6am on a
+Sunday.
 
 ---
 
-## Hour 1 · 0:00–1:00 — get both tracks moving
+## Block 1 · 40 minutes — measure the camera
 
-### 0:00–0:10 · Together: show him the thing
-
-Ten minutes of using it beats seventeen pages of reading about it.
-
-- [ ] Laptop → **https://jgmeyer13.github.io/skills-copilot-codespaces-vscode/**
-- [ ] Luca runs one full session on himself — check in, consent, mirror, thirty
-      seconds, review
-- [ ] Open the operator console (bottom right, **Operator**) and show him the
-      sealed dashboard
-- [ ] Then split up. From here the two tracks run at the same time.
-
-### 0:10–0:55 · PC track — Luca
-
-- [ ] OpenSCAD open, Gemini Pro open in a tab, brief section 6 to hand
-- [ ] Paste the **Step 1** prompt from brief section 7, with the parameter block
-- [ ] F5
-- [ ] **Check:** count the 500mm grid squares across the bay box. Five of them.
-      If the box is 2.5 units wide instead of 2500, stop and fix the scale now —
-      everything after this compounds it.
-- [ ] Paste **Step 2**. The person and the floor mark.
-- [ ] **Check:** the figure's head sits just under the top of the box — 2100mm
-      inside 2400mm. Ankle-high or through the ceiling means the proportions ran
-      off a different variable.
-
-### 0:10–0:55 · Camera track — the laptop
-
-Open the camera ruler. It is a page built for exactly this measurement:
+This is the one. Everything else tonight is downstream of it.
 
 **https://jgmeyer13.github.io/skills-copilot-codespaces-vscode/fov.html**
 
-![The camera ruler. It never crops the preview, draws the 4:5 box the app actually saves, and turns two tape readings into the camera distance.](shot-fov.png)
-
-- [ ] Pick **the camera you will use in the pilot** in the dropdown. A different
-      webcam is a different answer.
 - [ ] Tape the tape measure **vertically** up a wall, zero on the floor
-- [ ] Camera on something solid, **square to the wall — not tilted**. Tilt is the
-      one error that ruins this.
-- [ ] Measure lens-to-wall, type it in. 1500mm is plenty; the maths scales.
-- [ ] Read the highest and lowest marks visible **on the blue centre line** and
-      type them in
-- [ ] **Write the three numbers on paper:** the vertical field of view, the
-      camera distance, the bay depth.
+- [ ] Camera on something solid, lens **square to the wall** — not tilted up or
+      down. Tilt is the one error that ruins this.
+- [ ] Pick the camera you will use in the pilot in the dropdown
+- [ ] Measure lens-to-wall, type it in
+- [ ] Read the top and bottom marks on the blue centre line, type them in
+- [ ] **Write down:** vertical field of view, camera distance, bay depth
 
-### 0:55–1:00 · Together
+### Then do it again at the real distance
 
-- [ ] Luca types your measured `fov_vertical` and `camera_distance` into the
-      parameter block, replacing 43.3 and 2600
-- [ ] Add a comment beside them: which camera, measured tonight, and the date.
-      In six weeks nobody will remember which webcam that number came from.
+The first reading gives you the angle. The second proves it where a person
+actually stands, and it is the solo substitute for having someone to put in
+frame:
 
----
+- [ ] Move the camera back to the distance the ruler just gave you
+- [ ] Move the **wall scale** to where the floor mark will be — same distance
+      from the lens as a member would be
+- [ ] Read the top and bottom marks again
+- [ ] **That gap is how tall a person can be at that distance.** If it is less
+      than 2100mm with room to spare, the camera goes back further.
 
-## Hour 2 · 1:00–2:00 — the number that sets the floor space
+### Then prove it with the real thing
 
-### PC track — Luca
-
-- [ ] Paste **Step 3** — the camera, both view frustums, and the `echo()`
-- [ ] Look down the camera axis. The numpad keys 4, 5 and 6 cycle the views.
-- [ ] **Check:** is the figure inside the inner cone, with air above the head and
-      below the feet?
-- [ ] Compare Gemini's echoed frame height against the ruler's number for the
-      same distance. They should agree within a few percent.
-      **If they disagree, the tape measure wins.**
-
-### Camera track
-
-- [ ] Tape a **2500 × 3500mm** rectangle on Luca's floor. Then add a second line
-      at **3900mm** deep.
-- [ ] Both of you stand in it. Walk in through the open front. Put a chair where
-      the laptop goes and a broom where the light stand goes.
-- [ ] Photograph it from the doorway.
-
-That rectangle is what you show the gym owner. *"This much floor, roughly where
-that bench is"* is a conversation. *"9.2 square metres"* is a number they will
-round up in their head and say no to.
-
-### 1:40–2:00 · Together: the body test
-
-This is the one that settles it, because it uses a real camera and a real body
-instead of a spec sheet.
-
-- [ ] Camera at the distance the ruler gave you, aimed at a taped mark
-- [ ] The taller of you stands on the mark
-- [ ] Look at the **green 4:5 box** on the ruler page. Head and feet inside it,
-      with air to spare?
-- [ ] Step 200mm left. Then 200mm right. Still inside?
-- [ ] **Write the answer down.** Everything about the size of this bay rests on
-      it.
+- [ ] Open the app, run one full session on yourself at that distance
+- [ ] Look at the five saved photographs afterwards
+- [ ] Head and feet in frame, with air? Then the number is right and you have
+      tested the whole pipeline, not just the lens.
 
 ---
 
-## Break · 10 minutes
+## Block 2 · 20 minutes — tape the footprint
 
-Eat something. You are halfway and the next hour is the fun one.
+- [ ] Tape a **2500 × 3500mm** rectangle on the floor at home
+- [ ] Add a second line at **3900mm** deep
+- [ ] Put a chair where the laptop goes and a broom where the light stand goes
+- [ ] Stand in it. Walk in through the open front.
+- [ ] **Photograph it from the doorway**
 
----
-
-## Hour 3 · 2:10–3:10 — is the light in the shot?
-
-### 2:10–2:35 · Together: the cardboard softbox
-
-Brief section 4.3 says the softbox probably intrudes into the frame, by
-somewhere between 20mm and 80mm. That was arithmetic. This costs nothing and
-settles it.
-
-- [ ] Cut or tape out a **350 × 1600mm** rectangle — cardboard, newspaper,
-      anything flat and the right size
-- [ ] One of you holds it upright, face turned toward the mark, **1200mm from
-      the mark at 45° off the camera axis**. In practice: about **850mm to the
-      side and 850mm toward the camera**.
-- [ ] The other watches the ruler page
-- [ ] **Is any part of it inside the green 4:5 box?**
-- [ ] Photograph the screen, whichever way it goes
-- [ ] If it is in shot: slide it back until it is out, and measure the new
-      distance and angle. That is a real design input and it came from a piece
-      of cardboard.
-
-### 2:35–3:10 · PC track — Luca
-
-- [ ] Paste **Step 4** — the stand, the softbox, the throw cone, and the
-      clearance answer in millimetres
-- [ ] Compare its clearance number against what you just watched happen with the
-      cardboard. If the model says a metre of clearance and the cardboard was in
-      shot, the model has the light on the wrong side.
+That photograph is what you show the gym owner. *"About this much, roughly
+where that bench is"* is a conversation. *"9.2 square metres"* is a number they
+round up and say no to.
 
 ---
 
-## Hour 4 · 3:10–4:00 — versions and the cut list
+## Block 3 · 25 minutes — is the light in the shot?
 
-### PC track — Luca
+Brief section 4.3 says the softbox probably intrudes into the frame by
+somewhere between 20mm and 80mm. That was arithmetic. This is cardboard, and
+cardboard wins.
 
-- [ ] **Step 5** — version 1, the weekend corner
-- [ ] **Step 6** — version 2, the pine unit, **and the cut list**
-
-The cut list is the commercially valuable output of the whole evening. It
-replaces a guessed R30,000 with a number of metres, a number of lengths and a
-price. Nothing else tonight changes a spreadsheet.
-
-### Camera track
-
-- [ ] Take the cut list and price it — look up South African pine batten prices
-      and write the per-metre rate down **separately**, so it can be corrected
-      without redoing the list
-- [ ] Put the evening's numbers in a file on the laptop as you go, not at the end
-
-### 3:45–3:55 · Together
-
-- [ ] **Step 8** — the blunt review. Argue with it. If it says something you both
-      know is wrong, say so and make it try again. If it says something that
-      stings, write it down.
-
-### 3:55–4:00 · Save everything
-
-- [ ] F6 render, then File → Export → STL, once per `show_version`
-- [ ] Three screenshots per version: front, side, and **down the camera axis** —
-      that last one is the one everybody will actually look at
-- [ ] The `.scad` file, the STLs and the screenshots onto the laptop or into the
-      repo
+- [ ] Cut or tape out a **350 × 1600mm** rectangle
+- [ ] Tape it upright to a chair back, a broom in a bucket, a door — anything
+      that stands still and does not care how long it takes
+- [ ] Put it **1200mm from the mark at 45°**: about **850mm to the side and
+      850mm toward the camera**
+- [ ] Turn its face toward the mark
+- [ ] Look at the ruler page. **Is any part of it inside the green 4:5 box?**
+- [ ] Photograph the screen either way
+- [ ] If it is in shot: slide it back until it is out, and measure where it
+      ended up. That is a real design input and it cost you a cereal box.
 
 ---
 
-## If you fall behind
+## Block 4 · 90 minutes — the SCAD, Steps 0 to 4
 
-Finish **hour 1 and hour 2**. That is the measured field of view, the camera
-distance, the bay depth and a footprint on the floor. Hours 3 and 4 can happen
-on any evening and do not need you both in the same room. Hour 2 does.
+You do not need Luka for this. You wrote a pose-detection app; OpenSCAD is
+easier than the thing you already built. What you do need is to not try to
+finish it tonight.
+
+**Tonight is Steps 0 to 4 of brief section 7.** Install, grid and box, person
+and mark, camera and field-of-view cone, light. Stop there. Steps 5 to 8 are
+the fabrication detail and they will still be there on Sunday.
+
+### Laptop settings that make this bearable
+
+Put these at the top of the file before anything else:
+
+```scad
+$fn = 24;            // 24 while you work. Push to 64 only for the final F6.
+preview_only = true; // see the note below
+```
+
+- **Press F5, not F6.** F5 is the preview and it is near-instant. F6 is the
+  real render and on a laptop with three versions and two cones it can take
+  minutes. You need F6 exactly once, at the end, to export an STL.
+- **Draw the cones with `%`.** A shape prefixed with `%` is transparent in
+  preview **and skipped entirely by F6**. The two view cones are the most
+  expensive objects in the model and the ones you least need in an STL.
+- **`show_version = 1;` and leave it there.** Rendering all three at once is
+  three times the work for no extra information.
+- **If a render hangs:** it is almost always `minkowski()` or a `$fn` in the
+  hundreds. Kill it, fix that, F5 again.
+
+### Which AI for what
+
+| | |
+|---|---|
+| **ChatGPT or Gemini** | Writing the code. Long generation, lots of iteration, and you can paste an error straight back. Use one chat for the whole session so it remembers the parameter block. |
+| **This Claude session** | The numbers, the context and judging the answers. When an AI tells you a clearance figure, bring it here and we check it against what the cardboard did. |
+
+**When something breaks, paste the error, do not describe it.** "It says
+`WARNING: Ignoring unknown variable 'bay_dep'`" gets fixed in one reply.
+"It's not working" gets you a guessing game.
+
+**Guard the parameter block.** After every new file an AI hands you, scan the
+numbers against brief section 6. An AI quietly rounding `2600` to `2500` is the
+likeliest way this design goes wrong, and once it is buried in a module you
+will never see it.
+
+### The one check that matters tonight
+
+When Step 3 is done, look down the camera axis — numpad **4**, **5**, **6**
+cycle the views. **Is the figure inside the inner cone with air above the head
+and below the feet?** Then compare the number the AI echoes against the number
+the tape measure gave you in Block 1. If they disagree, **the tape wins** and
+the model gets corrected, not the other way round.
+
+---
+
+## Block 5 · 15 minutes — write it down before you sleep
+
+- [ ] The `.scad` file saved somewhere that is not just the desktop
+- [ ] The three numbers typed into the repo **and** written on paper
+- [ ] The footprint photograph, the cardboard photograph, the session photos
+- [ ] One line on anything that surprised you
+
+---
+
+## If you only do one thing
+
+**Block 1.** The measured field of view and the camera distance that follows
+from it. That number sets how much floor you ask Aspire for, and the
+conversation with the owner is the thing the whole business is currently
+waiting on. The SCAD is how you check the design; Block 1 is what the design is
+made of.
 
 ## Two things not to do tonight
 
 - **Do not buy anything.** The shopping list waits until after the gym visit.
-  All three economic analyses agreed on that, and the one thing that would
-  change it — a gym owner saying yes — has not happened yet.
+  The one thing that would change that — an owner saying yes — has not happened.
 - **Do not design around a corner nobody has measured.** Aspire gets measured
-  this weekend. Tonight is the camera and the frame, which are true wherever
+  this weekend. Tonight is the camera and the frame, which stay true wherever
   the bay ends up standing.
-
-## Before you leave
-
-- [ ] `.scad` file, STLs and screenshots saved somewhere that is not only
-      Luca's desktop
-- [ ] The three numbers on paper **and** typed into the repo
-- [ ] Photographs: the taped footprint, the body test, the cardboard softbox
-- [ ] Anything Luca said that surprised you, written down before you forget it
 
 ---
 
 ## Three decisions still open
-
-Not tonight's work, but they are going to be asked for, so know where they
-stand:
 
 | | |
 |---|---|
@@ -249,20 +187,9 @@ stand:
 | **Which camera** | Whichever one you measure tonight is the one that sets `camera_distance`. Swapping it later changes the bay depth, which changes what you asked the gym for. |
 | **Phone transfer** | Still unresolved. Sending photographs to a member's phone over a laptop hotspot has never been tested on that laptop, and it may simply not be reliable. It needs an honest answer before the pilot, not a workaround. |
 
-## For Luca — getting everything
+## When Luka is better
 
-The repository is public. No login, no account, nothing to ask for:
-
-```bash
-git clone https://github.com/jgmeyer13/skills-copilot-codespaces-vscode.git
-cd skills-copilot-codespaces-vscode/pilot
-git checkout kelvin-command-centre     # where the current work lives
-python3 -m http.server 4400            # then http://localhost:4400
-```
-
-Everything referenced in the brief is in that folder: `README.md`,
-`DECISIONS.md`, `FIELD-RESEARCH.md`, `RISKS-POPIA.md`, `RUNSHEET.md`, the
-source, and the test suite. `node tools/verify.mjs` runs the lot against a fake
-camera if you want to see it prove itself.
-
-The camera ruler is `pilot/fov.html`, or live at the URL in hour 1.
+`LUKA-BRIEF.pdf` still stands — nothing in it assumed he would start tonight.
+Steps 5 to 8 are the cut list, the production pod and the blunt review, and
+they are the parts where a second opinion is worth most. Send him the brief
+when he is up to reading it, and the clone line is on its last page.

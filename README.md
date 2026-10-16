@@ -27,10 +27,11 @@ Three documents matter more than the code:
 |---|---|
 | **Check in** | Two identity modes, set by `memberIdMode` in `config.json`. `phone-hash` salts and hashes the number on the device — convenient, but reversible by anyone holding the laptop, so the records stay personal information (risk 1). `code` issues a random code the member keeps on their phone, and stores nothing derived from them at all. |
 | **Consent** | Built from `consent/consent.en.md`, which a lawyer can edit without touching code. Three ticks: 18+, the recording, and — separately and off by default — keeping a history. |
+| **Rig setup** | Before a shift. Locks the camera's exposure, white balance and focus where the hardware allows, reports what actually held rather than what was asked for, and records the room's light so later sessions can be measured against it. The part a phone app cannot copy: it owns the room. |
 | **Mirror** | The product. Live view with the floor mark, the ghost of the body that stood here last time, and a lock ring around the member's own hips that fills while they hold the position. One instruction at a time — step back, step left, square up — because four corrections at once get none of them done. It never disables Start: alignment is advice, and advice that locks the door is not advice. |
 | **Capture** | Thirty seconds, solo or up to three. MediaPipe Pose runs in the browser and picks the best held frame per pose, plus one candid. |
 | **Review** | Five photographs, **unlabelled, in random order**. Keep, or send and wipe. Anything not kept is deleted immediately; anything missed is deleted at end of day. The member is never told which frame is the comparison one — which one they keep is the measurement, and an interface that explains the measurement to its subject has destroyed it. |
-| **Compare** | Returning members who kept a comparison frame see then and now — side by side by default, with a slide-across view on request. Side by side leads because it shows both bodies at once; the wipe looks better and shows half as much. |
+| **Compare** | Returning members who kept a comparison frame see then and now — side by side by default, with a slide-across view and a flip on request, plus a timeline of every visit once there are more than two. Side by side leads because it shows both bodies at once; the wipe looks better and shows half as much; the flip is the one that reveals small changes, and it only works because the frames are registered. A card can be drawn from any pair — on this laptop, offered as a download, sent nowhere. |
 | **Walk away** | Every member-facing screen clears itself after a period of no touching, with a warning first. A review screen left unattended deletes its photographs rather than leaving them for the midnight sweep, and the session is logged `abandoned` so it never counts against keep rate. Capture and the operator screen are exempt: holding still is the task, and the operator is standing there. |
 | **Forget me** | A member can have everything of theirs deleted on the spot, from the screen they are holding or by the operator a week later. Photographs, outline and identifier go; the image-free session row stays, stripped of its key. |
 | **Operator** | A four-tab console — **Now** (readiness, today, the last session, your notes), **Quality** (are the progress shots comparable, what the model could see, what broke), **Pilot** (the funnel, demand, the sealed verdict) and **Data** (the rows, the CSV, the generated write-up). Fed by real sessions. **Sealed while the pilot runs** — raw counts only, no verdicts — and it unseals itself when both end conditions in `DECISIONS.md` are met. Also where the camera's resolution and the model's mean confidence are read against keep rate. |
@@ -67,6 +68,8 @@ consent/            the consent text, editable by a non-programmer
 src/db.js           IndexedDB, hashing, the purge, forget-me
 src/pose.js         MediaPipe in the browser · replay source for testing
 src/scoring.js      pose templates and best-frame selection — pure, no DOM
+src/registration.js the similarity fit that lines two visits up — pure
+src/rig.js          the camera lock and the light fingerprint — pure
 src/capture.js      the thirty seconds
 src/telemetry.js    the session log, the summary, the verdict, CSV
 vendor/             MediaPipe runtime and the 5.6MB pose model, served locally
@@ -78,6 +81,10 @@ tools/              clip generation, scoring tests, end-to-end verification
 ```bash
 node tools/test-scoring.mjs    # the pose templates, against synthetic skeletons
 node tools/test-align.mjs      # the alignment maths — distance, drift, rotation, the hold
+node tools/test-registration.mjs # the fit that lines two visits up, against known transforms
+node tools/test-rig.mjs        # the camera lock and the light drift, in stops
+node tools/test-setup.mjs      # the rig screen in a browser, on a camera that cannot lock everything
+node tools/test-compare.mjs    # the flip, the timeline and the card
 node tools/test-mirror.mjs     # the same maths reaching the screen, in a real browser
 node tools/test-report.mjs     # the console's arithmetic — daily counts, rates, pods, splits
 node tools/test-readiness.mjs  # the preflight checks and the pre-registration lock
@@ -103,6 +110,31 @@ the member.
 **What it cannot check is MediaPipe on a real body** — it correctly declines to
 find a person in a stick figure. That is item 2 of the checklist and the only
 thing that can still sink this.
+
+## Registering the progress shot
+
+Every progress-photo app on the store solves alignment the same way: a ghost
+of the last photograph in the viewfinder, and hope. It is the best a phone in
+a bedroom can do, because the phone does not know where it stood last time.
+
+A fixed rig does. So the residual difference — the 40mm they drifted forward,
+the two degrees they turned — is taken out of the photograph afterwards
+instead of nagged out of the person beforehand: a least-squares similarity
+over the four torso landmarks, fitted against **the member's first visit**
+rather than their last, so the reference cannot walk.
+
+Three things keep it honest:
+
+- **It cannot warp a body.** A similarity moves, turns and resizes the whole
+  frame; no proportion inside it can change.
+- **It refuses rather than guesses.** Outside the limits in `registration.js`
+  the photograph is saved exactly as captured, and the reason is recorded.
+- **It is not allowed to score itself.** The comparability number on the
+  Quality tab is computed from the raw landmarks, before any correction. A rig
+  measured after its own correction reports perfection whatever the room did.
+
+What was done to each frame is stored on the frame, so a member can be told
+and a reviewer can check.
 
 ## Deliberately not in the pilot
 
