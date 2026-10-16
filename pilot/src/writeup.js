@@ -13,6 +13,7 @@
  */
 
 import * as report from './report.js'
+import { describe as describeChange } from './changes.js'
 
 const pct = (n) => (n === null || n === undefined ? '—' : `${Math.round(n * 100)}%`)
 const day = (ts) => new Date(ts).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -34,7 +35,7 @@ export function interval(successes, n) {
 
 const band = (ci) => (ci ? `${pct(ci.p)} (95% CI ${pct(ci.low)}–${pct(ci.high)}, n=${ci.n})` : '—')
 
-export function writeUp({ sessions, summary, verdict, counters, config, rig = null, notes = [], now = Date.now() }) {
+export function writeUp({ sessions, summary, verdict, counters, config, rig = null, changeLog = [], notes = [], now = Date.now() }) {
   const rows = sessions.filter((s) => s.endedAt)
   const completed = rows.filter((s) => s.outcome !== 'abandoned')
   const kept = completed.filter((s) => (s.kept?.measurement ?? 0) + (s.kept?.post ?? 0) + (s.kept?.candid ?? 0) > 0)
@@ -228,6 +229,21 @@ export function writeUp({ sessions, summary, verdict, counters, config, rig = nu
     p('## What the operator wrote down')
     p('The part no dashboard can see.')
     for (const n of notes) p(`**${n.date}** — ${n.text}`)
+  }
+
+  p('---', '## What changed while it was running')
+  if (!changeLog.length) {
+    p(
+      'Nothing that a member could notice was edited after the pilot started. The settings are ' +
+        'snapshotted at the start and compared on every load, so this is a check rather than a claim.',
+    )
+  } else {
+    p(
+      `${changeLog.length} change(s) were detected. Every number above that depends on one of them ` +
+        'covers two different things either side of the date, and the average of two different things ' +
+        'is not a measurement of either.',
+    )
+    for (const c of changeLog) p(`- ${day(c.at)} — ${describeChange(c)}`)
   }
 
   p('---', '## What this pilot cannot tell you')

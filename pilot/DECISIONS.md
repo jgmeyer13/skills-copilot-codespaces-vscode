@@ -163,7 +163,13 @@ member, so they reach useful precision sooner — around ±9pp at 120 sessions.
   remain.
 - **One change at a time.** If you change the light, the price, the script or
   the poses mid-pilot, the metric it affects restarts from that date and you
-  say so in the log.
+  say so in the log. **This rule now enforces itself.** Asking a person on a
+  gym floor to remember, four weeks later, that they reworded a cue on the
+  Tuesday is how a rule becomes a sentence nobody follows. The settings a
+  member could notice are snapshotted when you press *Start real pilot* and
+  compared on every load; anything that differs is written to the change log
+  on the Pilot tab and reproduced in the generated write-up. Changing
+  something is still allowed — not knowing you did is what ruins the data.
 - **Record the sessions that did not happen.** Someone who reads the consent
   screen and walks away is data. So is someone who sees a queue and leaves.
   Tap the queue counter even when nobody is waiting.

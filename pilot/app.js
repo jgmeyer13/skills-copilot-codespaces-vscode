@@ -29,6 +29,7 @@ import { silhouette } from './src/silhouettes.js'
 import { alignment, createLock } from './src/align.js'
 import { readiness, worstState, rulesFingerprint } from './src/readiness.js'
 import { registration, pixelMatrix } from './src/registration.js'
+import * as changes from './src/changes.js'
 import * as rig from './src/rig.js'
 import * as report from './src/report.js'
 import { barChart, lineChart, funnelChart, splitBar, PALETTE } from './src/charts.js'
@@ -246,6 +247,50 @@ async function summaryFor(demo) {
   return summarise(rows)
 }
 
+/**
+ * Notice what has been edited since the pilot started.
+ *
+ * DECISIONS.md requires a log of mid-pilot changes and, until now, required a
+ * person to remember four weeks later that they reworded a cue on a Tuesday.
+ * Nobody does. The settings a member could notice are snapshotted when the
+ * real pilot starts and compared on every load, so the change writes itself
+ * down whether or not anybody was paying attention.
+ *
+ * It does not block anything. Changing the price mid-pilot may well be the
+ * right call; pretending afterwards that you did not is what ruins the data.
+ */
+/** The baseline every later load is compared against. */
+async function snapshotSettings() {
+  const consentHashes = Object.fromEntries(
+    Object.entries(state.consentTexts ?? {}).map(([code, text]) => [code, hash(String(text))]),
+  )
+  await db.setMeta('settingsAtStart', changes.watched(config, { consentHashes }))
+  await db.setMeta('changeLog', [])
+}
+
+async function noteChanges() {
+  if (!state.pilot?.started) return
+  const consentHashes = Object.fromEntries(
+    Object.entries(state.consentTexts ?? {}).map(([code, text]) => [code, hash(String(text))]),
+  )
+  const now = changes.watched(config, { consentHashes })
+  const before = await db.getMeta('settingsAtStart')
+  if (!before) {
+    // An older pilot that started before any of this existed: take today's
+    // settings as the baseline rather than reporting every one as a change.
+    await db.setMeta('settingsAtStart', now)
+    return
+  }
+  const found = changes.diff(before, now)
+  if (!found.length) return
+  const log = (await db.getMeta('changeLog')) ?? []
+  await db.setMeta('changeLog', [...log, ...found])
+  // The new values become the baseline, so one edit is logged once rather
+  // than on every load for the rest of the pilot.
+  await db.setMeta('settingsAtStart', now)
+  banner(`${found.length} setting(s) changed since the pilot started — logged.`, 6000)
+}
+
 async function refreshPilotState() {
   state.pilot = await db.pilotState()
   state.demo = !state.pilot.started
@@ -260,6 +305,7 @@ async function refreshPilotState() {
   }
   $('start-pilot').textContent = state.demo ? 'Start real pilot' : 'Pilot running'
   $('start-pilot').disabled = !state.demo
+  await noteChanges()
   await refreshAttract()
 }
 
@@ -290,6 +336,7 @@ $('start-pilot').addEventListener('click', async () => {
     // rather than aspirational: any later edit shows up on the readiness
     // panel for the rest of the run.
     const wiped = await db.startRealPilot(rulesFingerprint(config.decisionRules))
+    await snapshotSettings()
     await refreshPilotState()
     renderDashboard()
     banner(
@@ -2326,7 +2373,34 @@ function renderQuality(rows, s, counters) {
 
 // ── Pilot ──────────────────────────────────────────────────────────────────
 
+async function renderChangeLog() {
+  const log = (await db.getMeta('changeLog')) ?? []
+  const host = $('change-log')
+  if (!log.length) {
+    host.innerHTML = state.demo
+      ? '<p class="tiny">Nothing to watch yet — this starts when the real pilot does.</p>'
+      : '<p class="tiny">Nothing has changed since the pilot started.</p>'
+    return
+  }
+  host.innerHTML =
+    `<table class="quality"><thead><tr><th>When</th><th>What</th><th>From → to</th><th>What restarts</th></tr></thead><tbody>` +
+    log
+      .slice()
+      .reverse()
+      .map(
+        (c) => `<tr class="${c.severity === 'broken' ? 'bad' : ''}">
+          <td class="mono">${dayLabel(c.at)}</td>
+          <td>${esc(c.key)}</td>
+          <td class="mono tiny">${esc(c.from)} → ${esc(c.to)}</td>
+          <td>${esc(c.metrics.join(', '))}<em class="tiny" style="display:block;color:var(--text-3)">${esc(c.why)}</em></td>
+        </tr>`,
+      )
+      .join('') +
+    '</tbody></table>'
+}
+
 function renderPilot(rows, s, v, counters) {
+  renderChangeLog()
   renderSeal(s, v)
 
   const fn = report.funnel(counters)
@@ -2503,6 +2577,7 @@ $('export-report').addEventListener('click', async () => {
     counters: await db.counters(),
     config,
     rig: await loadRig(),
+    changeLog: (await db.getMeta('changeLog')) ?? [],
     notes,
   })
   const name = `podium-writeup-${new Date().toISOString().slice(0, 10)}${state.demo ? '-DEMO' : ''}.md`
@@ -2543,6 +2618,7 @@ window.__pilot = {
   async seedSessions(rows) { for (const row of rows) await db.saveSession(row) },
   async startRealPilot() {
     const r = await db.startRealPilot(rulesFingerprint(config.decisionRules))
+    await snapshotSettings()
     await refreshPilotState()
     return r
   },
@@ -2555,6 +2631,8 @@ window.__pilot = {
      thirty-second sessions to produce. */
   presentCompare: () => presentCompare(),
   idleFor: idleMsFor,
+  /* The detector runs on load; the harness needs to run it on demand. */
+  noteChanges: () => noteChanges(),
   /*
    * The harness turns the watchdog off.
    *

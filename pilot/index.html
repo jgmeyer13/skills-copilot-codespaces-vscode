@@ -463,6 +463,11 @@ table.log td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); color
 .check span { font-size: 13px; color: var(--text-2); }
 .check em { display: block; font-style: normal; font-size: 13px; color: var(--text-3); margin-top: 4px; }
 
+/* A changed threshold is not a logged event, it is a broken pre-registration,
+   and it should not look like the row above it. */
+.quality tr.bad td { background: rgba(255,77,87,0.09); }
+.quality tr.bad td:first-child { box-shadow: inset 2px 0 0 var(--stop); }
+
 /* ── the walk-away tallies ──────────────────────────────────────────────── */
 
 .tallies { display: grid; gap: 10px; margin-bottom: 18px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
@@ -1077,6 +1082,13 @@ table.quality td { padding: 8px 10px 8px 0; border-top: 1px solid var(--hair); c
         <div class="verdict" id="verdict" hidden></div>
         <dl class="tiles" id="tiles"></dl>
         <div class="rules" id="rules" hidden></div>
+
+        <h3>What changed since the pilot started</h3>
+        <p class="tiny">Noticed, not remembered. The settings a member could notice are snapshotted
+        when the real pilot starts and compared on every load, because nobody recalls four weeks later
+        that they reworded a cue on a Tuesday. Changing something is allowed; not knowing you did is
+        what ruins the data.</p>
+        <div id="change-log"></div>
 
         <h3>Where people stop</h3>
         <p class="tiny">Counts, not verdicts. A member who leaves at the consent screen writes no

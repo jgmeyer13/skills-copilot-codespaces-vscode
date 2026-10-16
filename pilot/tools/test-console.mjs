@@ -176,6 +176,35 @@ await page.locator('#to-dashboard').click()
 await page.waitForSelector('#tallies .tally', { timeout: 10000 })
 check('a tally survives a reload', (await firstCount()) === '1')
 
+// ── the change log ────────────────────────────────────────────────────────
+await page.locator('#dash-tabs button[data-tab="pilot"]').click()
+await page.waitForSelector('#change-log', { timeout: 10000 })
+check('the change log is on the pilot tab and empty to start',
+  /Nothing/.test(await page.locator('#change-log').innerText()),
+  await page.locator('#change-log').innerText())
+
+// Start the real pilot, edit a cue behind the app's back, reload, and the
+// edit has to appear on its own — nobody is going to remember it.
+await page.evaluate(async () => { await window.__pilot.startRealPilot() })
+await page.evaluate(() => { window.__pilot.config.capture.sets.physique.steps[1].cue = 'Arms up. Go.' })
+await page.evaluate(async () => { await window.__pilot.noteChanges() })
+await page.locator('#dash-tabs button[data-tab="now"]').click()
+await page.locator('#dash-tabs button[data-tab="pilot"]').click()
+await page.waitForFunction(() => /words/.test(document.getElementById('change-log').innerText), null, { timeout: 10000 })
+const logged = await page.locator('#change-log').innerText()
+check('a cue reworded mid-pilot logs itself', /words/.test(logged) && /Arms up\. Go\./.test(logged),
+  logged.replace(/\n/g, ' · ').slice(0, 160))
+check('and says which numbers restart', /keep rate/.test(logged) && /comparability/.test(logged))
+
+// Logged once, not on every load for the rest of the pilot.
+await page.evaluate(async () => { await window.__pilot.noteChanges() })
+await page.locator('#dash-tabs button[data-tab="now"]').click()
+await page.locator('#dash-tabs button[data-tab="pilot"]').click()
+await page.waitForTimeout(300)
+check('and is logged once, not on every load',
+  (await page.locator('#change-log tbody tr').count()) === 1,
+  `${await page.locator('#change-log tbody tr').count()} rows`)
+
 check('no console errors anywhere in the console', errs.length === 0, errs.slice(0, 2).join(' | '))
 
 console.log(failed ? `\n${failed} FAILED\n` : '\nconsole OK\n')
