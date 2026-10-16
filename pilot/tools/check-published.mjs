@@ -43,9 +43,14 @@ await page.locator('#start').click()
 for (const d of '0821234567') await page.locator('#keypad button',{hasText:new RegExp(`^${d}$`)}).first().click()
 await page.locator('#phone-next').click()
 await page.waitForFunction(()=>document.getElementById('app').dataset.screen==='consent',null,{timeout:15000})
-console.log('consent sections:', await page.locator('.consent-card').count())
-await page.locator('#tick-age').check(); await page.locator('#tick-record').check()
+// One screen, three lines, one button — the ticks this used to check were
+// removed when consent was rewritten, and a checker that drives a UI the app
+// no longer has reports a broken deploy every time it runs.
+console.log('consent lines:', await page.locator('#consent-lines li').count())
 await page.locator('#consent-next').click()
+// Pose choice sits between consent and the mirror now.
+await page.waitForFunction(()=>document.getElementById('app').dataset.screen==='poseset',null,{timeout:15000})
+await page.locator('#setpick button[data-set="physique"]').click()
 await page.waitForFunction(()=>document.getElementById('app').dataset.screen==='ready',null,{timeout:60000})
 await page.waitForFunction(()=>!!window.__pilot.state.pose, null, { timeout: 150000 })
 const info = await page.evaluate(()=>({ delegate: window.__pilot.state.pose.delegate, cam: window.__pilot.state.camera }))
