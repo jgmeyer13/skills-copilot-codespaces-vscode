@@ -45,11 +45,47 @@ conservative 43.3° vertical FOV. The required distance for a 10% margin is
 - How the lighting actually looks. Geometry says the softbox is out of frame;
   it says nothing about whether the photograph is any good.
 
-## Still open in the model
+## The cut list, and the cliff edge in it
 
-- The cut list for version 2 — the members are modelled separately so they can
-  be counted, but nothing counts them yet.
-- Extrusion metres, bracket count and panel area for version 3.
+`node cutlist.mjs` prints what to buy, from the same parameters the model is
+drawn from. `node cutlist.mjs --test` checks the arithmetic.
+
+**Version 2:** 15 members, **45.8 m** of 70×70 pine.
+**Version 3:** **40.4 m** of 40×40 T-slot, 23.8 m² of panel, 34 brackets.
+
+The rates are blank on purpose. No South African supplier publishes a rand
+price per metre for either, and the ones that exist online are British,
+Australian and American. Quantities are the hard part and the model knows
+them; a yard can quote from this list in one phone call.
+
+### The finding
+
+The long rails are 4000mm, and **4000mm does not come out of 3.6m stock.** So
+the frame jumps to 5.4m bars and 23% of what you buy becomes offcut.
+
+Sweep the camera distance and there is a cliff:
+
+| Camera | Bay depth | Floor | Pine | Buy | Waste |
+|---|---|---|---|---|---|
+| **2500mm** | 3600mm | 9.00 m² | 43.4 m | **15 × 3.6m = 54 m** | **19.6%** |
+| 2600mm | 3700mm | 9.25 m² | 44.0 m | 11 × 5.4m = 59.4 m | 25.9% |
+| 2900mm | 4000mm | 10.00 m² | 45.8 m | 11 × 5.4m = 59.4 m | 22.9% |
+| 3400mm | 4500mm | 11.25 m² | 48.8 m | 11 × 5.4m = 59.4 m | 17.8% |
+
+At 2500mm the bay is exactly 3600mm deep and every long rail is one standard
+length, cut once. One hundred millimetres further and you are buying 5.4m bars
+to make 4m pieces.
+
+**And the optics want 2900mm.** A 2100mm person needs 2910mm at 43.3° vertical
+to have a 10% margin. So the lens and the timber yard disagree, and the size
+of the disagreement is exactly the uncertainty in a field-of-view figure taken
+off a spec sheet.
+
+That is what the tape measure decides. Not just whether somebody fits — whether
+the frame is 54 m of timber or 59.4 m, and whether you ask the gym for 9.0 m²
+or 10.0 m².
+
+## Still open in the model
 - Dimensioned 2D output a fabricator could quote from. OpenSCAD exports mesh
   (STL); a metal shop wants a dimensioned PDF and ideally STEP. That is a
   reason to redraw this in Fusion or FreeCAD **once the design is settled** —
